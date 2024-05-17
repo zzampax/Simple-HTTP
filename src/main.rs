@@ -48,6 +48,44 @@ async fn auth_token(token: &str) -> bool {
     return user_exists;
 }
 
+async fn api_messages() -> String {
+    let mut messages: String = "".to_string();
+    let dbconn: Connection = dbconn();
+
+    let dbmessages: Vec<rusqlite::Result<(String, String, String)>> = dbconn
+        .prepare("SELECT sha256, message, datetime FROM messages")
+        .unwrap()
+        .query_map([], |row| {
+            Ok((
+                row.get(0).unwrap(),
+                row.get(1).unwrap(),
+                row.get(2).unwrap(),
+            ))
+        })
+        .unwrap()
+        .collect();
+
+    // format and send as JSON
+    for message in dbmessages {
+        let (token, message, datetime) = message.unwrap();
+        let user: JsonValue = eval_token(&token).await;
+        messages += &format!(
+            r#"{{
+                "email": "{}",
+                "message": "{}",
+                "datetime": "{}"
+            }},"#,
+            user["email"], message, datetime
+        );
+    }
+    messages.pop(); // remove trailing comma
+
+    return format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n[{}]",
+        messages
+    );
+}
+
 async fn get_404() -> String {
     let contents: String = fs::read_to_string("pages/404.html").unwrap();
     return format!("HTTP/1.1 404 NOT FOUND\r\n\r\n{}", contents);
@@ -61,6 +99,11 @@ async fn get_index() -> String {
 async fn get_login() -> String {
     let contents: String = fs::read_to_string("pages/login.html").unwrap();
     return format!("HTTP/1.1 200 OK\r\n\r\n{}", contents);
+}
+
+fn get_logout() -> String {
+    // delete cookie from browser
+    return format!("HTTP/1.1 301 OK\r\nSet-Cookie: token=; Max-Age=0\r\nLocation: /\r\nContent-Length: 0\r\n\r\n");
 }
 
 async fn get(mut path: String, _headers: Vec<&str>) -> String {
@@ -93,6 +136,14 @@ async fn get(mut path: String, _headers: Vec<&str>) -> String {
                 get_index().await
             } else {
                 get_login().await
+            }
+        },
+        "/logout" => get_logout(),
+        "/api/v1/messages" => {
+            if auth {
+                api_messages().await
+            } else {
+                return "HTTP/1.1 401 UNAUTHORIZED\r\n\r\n".to_string() + "401 Unauthorized";
             }
         }
         _ => get_404().await,
@@ -129,6 +180,7 @@ async fn post_login(dbconn: Connection, params: Vec<&str>) -> String {
 
     let token: String = URL_SAFE.encode(&to_encode.dump().as_bytes());
 
+    // TODO: Change the authentication method (compare email and password with the database not the hash of the token because it will be different every time)!!!
     let user_exists: bool = dbconn
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM users WHERE sha256 = ?1)",
@@ -146,10 +198,12 @@ async fn post_login(dbconn: Connection, params: Vec<&str>) -> String {
             .unwrap();
     } else {
         let user: JsonValue = eval_token(&digest(token.clone())).await;
+        println!("Real user: {} {}, Provided user: {} {}", user["email"], user["password"], email, digest(password));
         if user["email"] != email || user["password"] != digest(password) {
             return "HTTP/1.1 401 UNAUTHORIZED\r\n\r\n".to_string() + "401 Unauthorized";
         }
     }
+    // TODO: Change the authentication method (compare email and password with the database not the hash of the token because it will be different every time)!!!
 
     return format!(
         "HTTP/1.1 301 OK\r\nSet-Cookie: token={}\r\nLocation: /\r\nContent-Length: 0\r\n\r\n",
@@ -164,18 +218,29 @@ async fn post_message(params: Vec<&str>, sha256_token: &str) -> String {
 
     let decoded: JsonValue = eval_token(sha256_token).await;
 
-    let mut message: &str = "";
+    // find message in params and decode it using form_urlencoded
+    let mut message: String = "".to_string();
     for param in params {
-        let key_value: Vec<&str> = param.split("=").collect();
-        match key_value[0] {
-            "message" => message = key_value[1],
-            _ => (),
+        let key_value: Vec<&str> = param.split('=').collect();
+        if key_value.len() == 2 {
+            let key: &str = key_value[0].trim();
+            let value: &str = key_value[1].trim();
+            if key == "message" {
+                message = value.replace("+", " ");
+            }
         }
     }
 
     if message.is_empty() {
         return "HTTP/1.1 400 BAD REQUEST\r\n\r\n".to_string() + "400 Bad Request";
     }
+
+    dbconn()
+        .execute(
+            "INSERT INTO messages (sha256, message) VALUES (?1, ?2)",
+            &[&sha256_token, &&message.as_str()],
+        )
+        .unwrap();
 
     println!(
         "{}",
@@ -220,6 +285,7 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
     let request_line: &str = lines.next().unwrap();
     // split the request line into three variables
     let mut request_line: std::str::SplitWhitespace = request_line.split_whitespace();
+    println!("Request: {}", request_line.clone().collect::<Vec<&str>>().join(" ").cyan());
 
     let (method, path, _version) = (
         request_line.next().unwrap().to_string(),
@@ -263,7 +329,23 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
 async fn main() {
     dbconn()
         .execute(
-            "CREATE TABLE IF NOT EXISTS users (sha256 TEXT, token TEXT)",
+            "CREATE TABLE IF NOT EXISTS users (
+                sha256 TEXT PRIMARY KEY,
+                token TEXT
+            );",
+            [],
+        )
+        .unwrap();
+
+    dbconn()
+        .execute(
+            "CREATE TABLE IF NOT EXISTS messages (
+                    message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sha256,
+                    message TEXT,
+                    datetime DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(sha256) REFERENCES users(sha256)
+                );",
             [],
         )
         .unwrap();
