@@ -1,183 +1,259 @@
+use base64::{engine::general_purpose::URL_SAFE, Engine as _};
+use colored::Colorize;
+use json::{self, JsonValue};
+use rusqlite::Connection;
+use sha256::digest;
 use std::fs;
-use sqlite::{Connection, Result};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use base64::{engine::general_purpose::URL_SAFE, Engine as _};
-use sha256::digest;
-use json;
 use urlencoding;
 
-async fn get(mut path: String, _headers: Vec<&str>) -> String {
-    if path == "/" {
-        path = "index.html".to_string();
+fn dbconn() -> Connection {
+    return Connection::open("users.db").unwrap();
+}
+
+async fn check_template(contents: &mut String, token: &str) -> String {
+    let mut userdata: JsonValue = eval_token(token).await;
+    userdata.remove("password");
+
+    for (key, value) in userdata.entries() {
+        let key: String = key.to_string();
+        let value: String = value.to_string();
+        let key: String = format!("&{{{}}}", key);
+        *contents = contents.replace(&key, &value);
     }
 
-    let mut query_string = "".to_string();
+    return contents.to_string();
+}
+
+async fn eval_token(token: &str) -> JsonValue {
+    let token: String = match dbconn().query_row(
+        "SELECT token FROM users WHERE sha256 = ?1",
+        &[token],
+        |row| row.get(0),
+    ) {
+        Ok(token) => token,
+        Err(_) => return json::parse("{}").unwrap(),
+    };
+
+    let decoded: Vec<u8> = URL_SAFE.decode(token.as_bytes()).unwrap();
+    let decoded: String = String::from_utf8(decoded).unwrap();
+    let decoded: JsonValue = json::parse(&decoded).unwrap();
+
+    return decoded;
+}
+
+async fn auth_token(token: &str) -> bool {
+    let user_exists: bool = eval_token(token).await != json::parse("{}").unwrap();
+    return user_exists;
+}
+
+async fn get_404() -> String {
+    let contents: String = fs::read_to_string("pages/404.html").unwrap();
+    return format!("HTTP/1.1 404 NOT FOUND\r\n\r\n{}", contents);
+}
+
+async fn get_index() -> String {
+    let contents: String = fs::read_to_string("pages/index.html").unwrap();
+    return format!("HTTP/1.1 200 OK\r\n\r\n{}", contents);
+}
+
+async fn get_login() -> String {
+    let contents: String = fs::read_to_string("pages/login.html").unwrap();
+    return format!("HTTP/1.1 200 OK\r\n\r\n{}", contents);
+}
+
+async fn get(mut path: String, _headers: Vec<&str>) -> String {
+    let mut _query_string = "".to_string();
     //check for query string
     if path.contains("?") {
-        query_string = path.split("?").collect::<Vec<&str>>()[1].to_string();
+        _query_string = path.split("?").collect::<Vec<&str>>()[1].to_string();
         path = path.split("?").collect::<Vec<&str>>()[0].to_string();
     }
 
-    if query_string != "" {
-        println!("Query String: {}", query_string);
+    let mut token = "";
+    for header in _headers {
+        if header.starts_with("Cookie: token=") {
+            token = header.split("token=").collect::<Vec<&str>>()[1];
+        }
     }
+    println!("Sha256 token: {}", token.cyan());
+    let auth: bool = auth_token(&token).await;
 
-    if !path.contains(".") {
-        path = format!("{}.html", path);
-    }
-
-    println!("Path: {}", path);
-
-    if path != "/login.html" {
-        let mut token = "";
-        for header in _headers {
-            if header.starts_with("Cookie: token=") {
-                token = header.split("token=").collect::<Vec<&str>>()[1];
+    let mut contents: String = match path.as_str() {
+        "/" => {
+            if auth {
+                get_index().await
+            } else {
+                get_login().await
             }
         }
+        "/login" => {
+            if auth {
+                get_index().await
+            } else {
+                get_login().await
+            }
+        }
+        _ => get_404().await,
+    };
 
-        if token.is_empty() {
+    contents = check_template(&mut contents, token).await;
+    return contents;
+}
+
+async fn post_login(dbconn: Connection, params: Vec<&str>) -> String {
+    let mut email: &str = "";
+    let mut password: &str = "";
+    for param in params {
+        let key_value: Vec<&str> = param.split('=').collect();
+        if key_value.len() == 2 {
+            let key: &str = key_value[0].trim();
+            let value: &str = key_value[1].trim();
+            match key {
+                "email" => email = value,
+                "password" => password = value,
+                _ => (),
+            }
+        }
+    }
+
+    if email.is_empty() || password.is_empty() {
+        return "HTTP/1.1 400 BAD REQUEST\r\n\r\n".to_string() + "400 Bad Request";
+    }
+
+    let to_encode: JsonValue = json::object! {
+        email: email,
+        password: digest(password)
+    };
+
+    let token: String = URL_SAFE.encode(&to_encode.dump().as_bytes());
+
+    let user_exists: bool = dbconn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE sha256 = ?1)",
+            &[&digest(token.clone())],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    if !user_exists {
+        dbconn
+            .execute(
+                "INSERT INTO users (sha256, token) VALUES (?1, ?2)",
+                &[&digest(token.clone()), &token],
+            )
+            .unwrap();
+    } else {
+        let user: JsonValue = eval_token(&digest(token.clone())).await;
+        if user["email"] != email || user["password"] != digest(password) {
             return "HTTP/1.1 401 UNAUTHORIZED\r\n\r\n".to_string() + "401 Unauthorized";
         }
     }
 
-    let contents: String = fs::read_to_string(format!("pages/{}", path)).unwrap_or_else(|_| {
-        path = "404.html".to_string();
-        fs::read_to_string(format!("pages/{}", path)).unwrap()
-    });
-
-    let response: String = format!("HTTP/1.1 200 OK\r\n\r\n{}", contents);
-
-    println!("Sending: {}", path);
-    return response;
+    return format!(
+        "HTTP/1.1 301 OK\r\nSet-Cookie: token={}\r\nLocation: /\r\nContent-Length: 0\r\n\r\n",
+        digest(token)
+    );
 }
 
-async fn post(path: String, _headers: Vec<&str>, body: &str) -> String {
-    println!("Body of request: {}", body);
+async fn post_message(params: Vec<&str>, sha256_token: &str) -> String {
+    if sha256_token.is_empty() {
+        return "HTTP/1.1 401 UNAUTHORIZED\r\n\r\n".to_string() + "401 Unauthorized";
+    }
 
+    let decoded: JsonValue = eval_token(sha256_token).await;
+
+    let mut message: &str = "";
+    for param in params {
+        let key_value: Vec<&str> = param.split("=").collect();
+        match key_value[0] {
+            "message" => message = key_value[1],
+            _ => (),
+        }
+    }
+
+    if message.is_empty() {
+        return "HTTP/1.1 400 BAD REQUEST\r\n\r\n".to_string() + "400 Bad Request";
+    }
+
+    println!(
+        "{}",
+        format!("{} says: {}", decoded["email"], message).bright_yellow()
+    );
+
+    return format!("HTTP/1.1 301 OK\r\nLocation: /\r\nContent-Length: 0\r\n\r\n");
+}
+
+async fn post(path: String, headers: Vec<&str>, body: &str) -> String {
     let body: String = urlencoding::decode(body).unwrap().to_string();
-    let params: Vec<&str> = body.split("&").map(|param: &str| param.trim_end_matches('\0')).collect();
-
-    println!("Path: {}", path);
+    let params: Vec<&str> = body
+        .split("&")
+        .map(|param: &str| param.trim_end_matches('\0'))
+        .collect();
+    let mut sha256_token: &str = "";
+    for header in headers {
+        if header.starts_with("Cookie: token=") {
+            sha256_token = header.split("token=").collect::<Vec<&str>>()[1];
+        }
+    }
+    println!("Sha256 token: {}", sha256_token.cyan());
 
     match path.as_str() {
-        "/login" => {
-            let mut email = "";
-            let mut password = "";
-            for param in params {
-                let key_value: Vec<&str> = param.split('=').collect();
-                if key_value.len() == 2 {
-                    let key = key_value[0].trim();
-                    let value = key_value[1].trim();
-                    match key {
-                        "email" => email = value,
-                        "password" => password = value,
-                        _ => (),
-                    }
-                }
-            }
-
-            if email.is_empty() || password.is_empty() {
-                return "HTTP/1.1 400 BAD REQUEST\r\n\r\n".to_string() + "400 Bad Request";
-            }
-
-            let to_encode = json::object! {
-                user: email,
-                pass: password
-            };
-
-            let token = digest(URL_SAFE.encode(&to_encode.dump().as_bytes()));
-
-            
-
-            // ENCRYPT THE TOKEN WITH AES
-            
-            return format!(
-                "HTTP/1.1 301 OK\r\nSet-Cookie: token={}\r\nLocation: /\r\nContent-Length: 0\r\n\r\n",
-                token
-            );
-        }
-        "/message" => {
-            // check for cookie
-            let mut token = "";
-            for header in _headers {
-                if header.starts_with("Cookie: token=") {
-                    token = header.split("token=").collect::<Vec<&str>>()[1];
-                }
-            }
-
-            if token.is_empty() {
-                return "HTTP/1.1 401 UNAUTHORIZED\r\n\r\n".to_string() + "401 Unauthorized";
-            }
-
-            let decoded = URL_SAFE.decode(token.as_bytes()).unwrap();
-            let decoded = String::from_utf8(decoded).unwrap();
-            let decoded: json::JsonValue = json::parse(&decoded).unwrap();
-
-            let mut message = "";
-            for param in params {
-                let key_value: Vec<&str> = param.split("=").collect();
-                match key_value[0] {
-                    "message" => message = key_value[1],
-                    _ => (),
-                }
-            }
-
-            if message.is_empty() {
-                return "HTTP/1.1 400 BAD REQUEST\r\n\r\n".to_string() + "400 Bad Request";
-            }
-
-            println!("{} says: {}", decoded["user"], message);
-
-            // response will have a Location header and a redirect to the home page
-            return format!("HTTP/1.1 301 OK\r\nLocation: /\r\nContent-Length: 0\r\n\r\n");
-        }
+        "/login" => post_login(dbconn(), params).await,
+        "/message" => post_message(params, sha256_token).await,
         _ => return "HTTP/1.1 404 NOT FOUND\r\n\r\n".to_string() + "404 Not Found",
     }
 }
 
 async fn handle_connection(mut socket: tokio::net::TcpStream) {
-    let mut buffer = [0; 16384];
+    let mut buffer: [u8; 16384] = [0; 16384];
     socket.read(&mut buffer).await.unwrap();
-    println!("\nNew connection from {}", socket.peer_addr().unwrap());
+    println!(
+        "\nNew connection from {}",
+        socket.peer_addr().unwrap().to_string().red()
+    );
 
-    let string_buffer = String::from_utf8_lossy(&buffer);
-    let mut lines = string_buffer.lines();
+    let string_buffer: std::borrow::Cow<str> = String::from_utf8_lossy(&buffer);
+    let mut lines: std::str::Lines = string_buffer.lines();
 
-    let request_line = lines.next().unwrap();
+    let request_line: &str = lines.next().unwrap();
     // split the request line into three variables
-    let mut request_line = request_line.split_whitespace();
+    let mut request_line: std::str::SplitWhitespace = request_line.split_whitespace();
 
     let (method, path, _version) = (
         request_line.next().unwrap().to_string(),
         request_line.next().unwrap().to_string(),
         request_line.next().unwrap().to_string(),
     );
-    let headers: Vec<&str> = lines.clone().take_while(|line| !line.is_empty()).collect();
+    let headers: Vec<&str> = lines
+        .clone()
+        .take_while(|line: &&str| !line.is_empty())
+        .collect();
 
-    let body = lines.last().unwrap();
+    let body: &str = lines.last().unwrap();
 
-    println!("Method: {}, Path: {}", method, path);
+    println!("Method: {}, Path: {}", method.green(), path.yellow());
 
     if let Some(accept_header) = headers
         .iter()
         .find(|&header| header.starts_with("Accept: "))
     {
         if accept_header.contains("image") && path.contains("favicon.ico") {
-            println!("Sending: /favicon.ico");
-            let response = "HTTP/1.1 200 OK\r\nContent-Type: image/x-icon\r\n\r\n".to_string();
+            println!("Sending: {}", "favicon.ico".yellow());
+            let response: String =
+                "HTTP/1.1 200 OK\r\nContent-Type: image/x-icon\r\n\r\n".to_string();
             socket.write_all(response.as_bytes()).await.unwrap();
-            let favicon = fs::read("pages/favicon.ico").unwrap();
+            let favicon: Vec<u8> = fs::read("pages/favicon.ico").unwrap();
             socket.write_all(&favicon).await.unwrap();
             return;
         }
     }
 
-    let response = match method.as_str() {
+    let response: String = match method.as_str() {
         "GET" => get(path, headers).await,
         "POST" => post(path, headers, body).await,
-        _ => "HTTP/1.1 404 NOT FOUND\r\n\r\n".to_string() + "404 Not Found",
+        _ => "HTTP/1.1 405 METHOD NOT ALLOWED\r\n\r\n".to_string() + "405 Method Not Allowed",
     };
 
     socket.try_write(response.as_bytes()).unwrap();
@@ -185,10 +261,14 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
 
 #[tokio::main]
 async fn main() {
-    let dbconn = Connection::open("users.db").unwrap();
-    dbconn.execute("CREATE TABLE IF NOT EXISTS users (sha256 TEXT, token TEXT)").unwrap();
+    dbconn()
+        .execute(
+            "CREATE TABLE IF NOT EXISTS users (sha256 TEXT, token TEXT)",
+            [],
+        )
+        .unwrap();
 
-    let mut port = 3000;
+    let mut port: i32 = 3000;
     loop {
         match TcpListener::bind(format!("127.0.0.1:{}", port)).await {
             Ok(listener) => {
