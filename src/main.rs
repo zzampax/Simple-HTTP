@@ -77,15 +77,14 @@ async fn api_messages() -> String {
 
     // format and send as JSON
     for message in dbmessages {
-        let (token, message, datetime) = message.unwrap();
-        let user: JsonValue = get_userdata(&token).await;
+        let (email, message, datetime) = message.unwrap();
         messages += &format!(
             r#"{{
                 "email": "{}",
                 "message": "{}",
                 "datetime": "{}"
             }},"#,
-            user["email"], message, datetime
+            email, message, datetime
         );
     }
     messages.pop(); // remove trailing comma
@@ -111,7 +110,7 @@ async fn get_login() -> String {
     return format!("HTTP/1.1 200 OK\r\n\r\n{}", contents);
 }
 
-fn get_logout() -> String {
+fn post_logout() -> String {
     // delete cookie from browser
     return format!("HTTP/1.1 301 OK\r\nSet-Cookie: token=; Max-Age=0\r\nLocation: /\r\nContent-Length: 0\r\n\r\n");
 }
@@ -148,7 +147,6 @@ async fn get(mut path: String, _headers: Vec<&str>) -> String {
                 get_login().await
             }
         }
-        "/logout" => get_logout(),
         "/api/v1/messages" => {
             if auth {
                 api_messages().await
@@ -272,10 +270,11 @@ async fn post_message(params: Vec<&str>, sha256_token: &str) -> String {
         return "HTTP/1.1 400 BAD REQUEST\r\n\r\n".to_string() + "400 Bad Request";
     }
 
+    let email: &str = decoded["email"].as_str().unwrap();
     dbconn()
         .execute(
             "INSERT INTO messages (email, message) VALUES (?1, ?2)",
-            &[&decoded["email"].as_str().unwrap(), &message.as_str()],
+            &[email, message.as_str()],
         )
         .unwrap();
 
@@ -303,6 +302,7 @@ async fn post(path: String, headers: Vec<&str>, body: &str) -> String {
 
     match path.as_str() {
         "/login" => post_login(dbconn(), params).await,
+        "/logout" => post_logout(),
         "/message" => post_message(params, sha256_token).await,
         _ => return "HTTP/1.1 404 NOT FOUND\r\n\r\n".to_string() + "404 Not Found",
     }
@@ -317,14 +317,15 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
     );
 
     let string_buffer: std::borrow::Cow<str> = String::from_utf8_lossy(&buffer);
+    println!("Request: {}", string_buffer.cyan());
     let mut lines: std::str::Lines = string_buffer.lines();
 
     let request_line: &str = lines.next().unwrap();
     // split the request line into three variables
     let mut request_line: std::str::SplitWhitespace = request_line.split_whitespace();
     println!(
-        "Request: {}",
-        request_line.clone().collect::<Vec<&str>>().join(" ").cyan()
+        "Request:\n {}",
+        request_line.clone().collect::<Vec<&str>>().join(" ").magenta()
     );
 
     let (method, path, _version) = (
@@ -404,7 +405,7 @@ async fn main() {
 
     let mut port: i32 = 3000;
     loop {
-        match TcpListener::bind(format!("127.0.0.1:{}", port)).await {
+        match TcpListener::bind(format!("0.0.0.0:{}", port)).await {
             Ok(listener) => {
                 println!("\n --> Server running on port {}! <--", port);
 
