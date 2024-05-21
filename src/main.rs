@@ -3,10 +3,11 @@ use colored::Colorize;
 use json::{self, JsonValue};
 use rusqlite::Connection;
 use sha256::digest;
-use std::fs;
+use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use urlencoding;
+use uuid::Uuid;
 
 fn dbconn() -> Connection {
     return Connection::open("users.db").unwrap();
@@ -96,17 +97,17 @@ async fn api_messages() -> String {
 }
 
 async fn get_404() -> String {
-    let contents: String = fs::read_to_string("pages/404.html").unwrap();
+    let contents: String = fs::read_to_string("pages/404.html").await.unwrap();
     return format!("HTTP/1.1 404 NOT FOUND\r\n\r\n{}", contents);
 }
 
 async fn get_index() -> String {
-    let contents: String = fs::read_to_string("pages/index.html").unwrap();
+    let contents: String = fs::read_to_string("pages/index.html").await.unwrap();
     return format!("HTTP/1.1 200 OK\r\n\r\n{}", contents);
 }
 
 async fn get_login() -> String {
-    let contents: String = fs::read_to_string("pages/login.html").unwrap();
+    let contents: String = fs::read_to_string("pages/login.html").await.unwrap();
     return format!("HTTP/1.1 200 OK\r\n\r\n{}", contents);
 }
 
@@ -115,7 +116,7 @@ fn post_logout() -> String {
     return format!("HTTP/1.1 301 OK\r\nSet-Cookie: token=; Max-Age=0\r\nLocation: /\r\nContent-Length: 0\r\n\r\n");
 }
 
-async fn get(mut path: String, _headers: Vec<&str>) -> String {
+async fn get(mut path: String, headers: Vec<(String, String)>) -> String {
     let mut _query_string: String = "".to_string();
     //check for query string
     if path.contains("?") {
@@ -123,14 +124,17 @@ async fn get(mut path: String, _headers: Vec<&str>) -> String {
         path = path.split("?").collect::<Vec<&str>>()[0].to_string();
     }
 
-    let mut token: &str = "";
-    for header in _headers {
-        if header.starts_with("Cookie: token=") {
-            token = header.split("token=").collect::<Vec<&str>>()[1];
-        }
-    }
-    println!("Sha256 token: {}", token.cyan());
-    let auth: bool = auth_token(&token).await;
+    let sha256_token: &str = headers
+        .iter()
+        .find(|header: &&(String, String)| header.0 == "Cookie")
+        .unwrap()
+        .1
+        .split("token=")
+        .collect::<Vec<&str>>()
+        .last()
+        .unwrap();
+    println!("Sha256 token: {}", sha256_token.cyan());
+    let auth: bool = auth_token(&sha256_token).await;
 
     let mut contents: String = match path.as_str() {
         "/" => {
@@ -157,7 +161,7 @@ async fn get(mut path: String, _headers: Vec<&str>) -> String {
         _ => get_404().await,
     };
 
-    contents = check_template(&mut contents, get_userdata(token).await).await;
+    contents = check_template(&mut contents, get_userdata(sha256_token).await).await;
     return contents;
 }
 
@@ -242,119 +246,323 @@ async fn post_login(dbconn: Connection, params: Vec<&str>) -> String {
     );
 }
 
-async fn post_message(params: Vec<&str>, sha256_token: &str) -> String {
-    if sha256_token.is_empty() {
-        return "HTTP/1.1 401 UNAUTHORIZED\r\n\r\n".to_string() + "401 Unauthorized";
-    }
+async fn post_comment(params: Vec<&str>, sha256_token: &str) -> String {
+    println!("Params: {:?} Token: {}", params, sha256_token);
+    return "HTTP/1.1 501 NOT IMPLEMENTED\r\n\r\n".to_string() + "501 Not Implemented";
+}
 
-    let decoded: JsonValue = get_userdata(sha256_token).await;
+async fn upload(
+    title: &str,
+    content: &str,
+    image_data: Vec<u8>,
+    image_name: String,
+    email: &str,
+) -> String {
+    println!(
+        "Title: {} Content: {} Image: {} Email: {}",
+        title, content, image_name, email
+    );
 
-    if decoded["email"].is_null() {
-        return "HTTP/1.1 401 UNAUTHORIZED\r\n\r\n".to_string() + "401 Unauthorized";
-    }
+    let mut file = tokio::fs::File::create(format!("images/{}", image_name))
+        .await
+        .unwrap();
 
-    // find message in params and decode it using form_urlencoded
-    let mut message: String = "".to_string();
-    for param in params {
-        let key_value: Vec<&str> = param.split('=').collect();
-        if key_value.len() == 2 {
-            let key: &str = key_value[0].trim();
-            let value: &str = key_value[1].trim();
-            if key == "message" {
-                message = value.replace("+", " ");
-            }
-        }
-    }
+    // write the image to the file
+    file.write_all(&image_data).await.unwrap();
 
-    if message.is_empty() {
-        return "HTTP/1.1 400 BAD REQUEST\r\n\r\n".to_string() + "400 Bad Request";
-    }
-
-    let email: &str = decoded["email"].as_str().unwrap();
     dbconn()
         .execute(
-            "INSERT INTO messages (email, message) VALUES (?1, ?2)",
-            &[email, message.as_str()],
+            "INSERT INTO posts (title, content, image, email) VALUES (?1, ?2, ?3, ?4)",
+            &[&title, &content, &image_name.as_str(), &email],
         )
         .unwrap();
 
-    println!(
-        "{}",
-        format!("{} says: {}", decoded["email"], message).bright_yellow()
-    );
-
-    return format!("HTTP/1.1 301 OK\r\nLocation: /\r\nContent-Length: 0\r\n\r\n");
+    return "HTTP/1.1 200 OK\r\n\r\n".to_string() + "200 OK";
 }
 
-async fn post(path: String, headers: Vec<&str>, body: &str) -> String {
-    let body: String = urlencoding::decode(body).unwrap().to_string();
+async fn post(path: String, headers: Vec<(String, String)>, body: String) -> String {
+    let body: String = urlencoding::decode(body.as_str()).unwrap().to_string();
     let params: Vec<&str> = body
         .split("&")
         .map(|param: &str| param.trim_end_matches('\0'))
         .collect();
-    let mut sha256_token: &str = "";
-    for header in headers {
-        if header.starts_with("Cookie: token=") {
-            sha256_token = header.split("token=").collect::<Vec<&str>>()[1];
-        }
-    }
+    let sha256_token: &str = headers
+        .iter()
+        .find(|header: &&(String, String)| header.0 == "Cookie")
+        .unwrap()
+        .1
+        .split("token=")
+        .collect::<Vec<&str>>()
+        .last()
+        .unwrap();
     println!("Sha256 token: {}", sha256_token.cyan());
 
     match path.as_str() {
         "/login" => post_login(dbconn(), params).await,
         "/logout" => post_logout(),
-        "/message" => post_message(params, sha256_token).await,
+        "/comment" => post_comment(params, sha256_token).await,
         _ => return "HTTP/1.1 404 NOT FOUND\r\n\r\n".to_string() + "404 Not Found",
     }
 }
 
+fn parse_http_request(request: &str) -> (String, String, Vec<(String, String)>, String) {
+    let mut lines = request.lines();
+    let start_line = lines.next();
+
+    match start_line {
+        Some(_) => {}
+        None => {
+            return (
+                "ERROR".to_string(),
+                "400 Bad Request".to_string(),
+                Vec::new(),
+                "".to_string(),
+            );
+        }
+    };
+    let start_line = start_line.unwrap();
+    let mut parts = start_line.split_whitespace();
+    let method = parts.next().unwrap().to_string();
+    let path = parts.next().unwrap().to_string();
+
+    let mut headers = Vec::new();
+    let mut body = String::new();
+
+    for line in &mut lines {
+        if line.is_empty() {
+            break;
+        }
+        let mut header_parts = line.splitn(2, ':');
+        let key = header_parts.next().unwrap().trim().to_string();
+        let value = header_parts.next().unwrap().trim().to_string();
+        headers.push((key, value));
+    }
+
+    for line in &mut lines {
+        body.push_str(line);
+        body.push('\n');
+    }
+
+    return (method, path, headers, body);
+}
+
 async fn handle_connection(mut socket: tokio::net::TcpStream) {
-    let mut buffer: [u8; 16384] = [0; 16384];
-    socket.read(&mut buffer).await.unwrap();
+    let mut complete_buffer: Vec<u8> = Vec::new();
     println!(
         "\nNew connection from {}",
         socket.peer_addr().unwrap().to_string().red()
     );
+    let mut buffer: [u8; 16384] = [0; 16384];
+    loop {
+        let bytes_read: usize = socket.read(&mut buffer).await.unwrap();
+        if bytes_read < 16384 {
+            complete_buffer.extend_from_slice(&buffer[..bytes_read]);
+            break;
+        }
+        complete_buffer.extend_from_slice(&buffer);
+    }
+    let string_buffer: std::string::String = String::from_utf8_lossy(&complete_buffer).to_string();
 
-    let string_buffer: std::borrow::Cow<str> = String::from_utf8_lossy(&buffer);
-    println!("Request: {}", string_buffer.cyan());
-    let mut lines: std::str::Lines = string_buffer.lines();
+    // dump the request to a file
+    let mut file = tokio::fs::File::create("request.txt").await.unwrap();
+    file.write_all(&string_buffer.as_bytes()).await.unwrap();
 
-    let request_line: &str = lines.next().unwrap();
-    // split the request line into three variables
-    let mut request_line: std::str::SplitWhitespace = request_line.split_whitespace();
-    println!(
-        "Request:\n {}",
-        request_line.clone().collect::<Vec<&str>>().join(" ").magenta()
-    );
-
-    let (method, path, _version) = (
-        request_line.next().unwrap().to_string(),
-        request_line.next().unwrap().to_string(),
-        request_line.next().unwrap().to_string(),
-    );
-    let headers: Vec<&str> = lines
-        .clone()
-        .take_while(|line: &&str| !line.is_empty())
-        .collect();
-
-    let body: &str = lines.last().unwrap();
+    let (method, path, headers, body) = parse_http_request(&string_buffer);
+    if method == "ERROR" {
+        socket
+            .write_all("HTTP/1.1 400 BAD REQUEST\r\n\r\n".to_string().as_bytes())
+            .await
+            .unwrap();
+        return;
+    }
 
     println!("Method: {}, Path: {}", method.green(), path.yellow());
+    println!("Headers: {}", format!("{:?}", headers).red());
 
-    if let Some(accept_header) = headers
+    let content_type: String = headers
         .iter()
-        .find(|&header| header.starts_with("Accept: "))
-    {
-        if accept_header.contains("image") && path.contains("favicon.ico") {
-            println!("Sending: {}", "favicon.ico".yellow());
-            let response: String =
-                "HTTP/1.1 200 OK\r\nContent-Type: image/x-icon\r\n\r\n".to_string();
-            socket.write_all(response.as_bytes()).await.unwrap();
-            let favicon: Vec<u8> = fs::read("pages/favicon.ico").unwrap();
-            socket.write_all(&favicon).await.unwrap();
+        .find(|header: &&(String, String)| header.0 == "Content-Type")
+        .unwrap_or(&("Content-Type".to_string(), "text/plain".to_string()))
+        .1
+        .to_string();
+
+    if content_type.contains("multipart/form-data") && path == "/upload" && method == "POST" {
+        let sha256_token: &str = headers
+            .iter()
+            .find(|header: &&(String, String)| header.0 == "Cookie")
+            .unwrap()
+            .1
+            .split("token=")
+            .collect::<Vec<&str>>()
+            .last()
+            .unwrap();
+        let decoded: JsonValue = get_userdata(sha256_token).await;
+
+        if sha256_token.is_empty() {
+            socket
+                .write_all("HTTP/1.1 401 UNAUTHORIZED\r\n\r\n".to_string().as_bytes())
+                .await
+                .unwrap();
             return;
+        } else {
+            if decoded["email"].is_null() {
+                socket
+                    .write_all("HTTP/1.1 401 UNAUTHORIZED\r\n\r\n".to_string().as_bytes())
+                    .await
+                    .unwrap();
+                return;
+            }
         }
+
+        let boundary: &str = content_type
+            .split("boundary=")
+            .collect::<Vec<&str>>()
+            .last()
+            .unwrap();
+        let mut parts: Vec<&str> = body.split(boundary).collect();
+        parts.remove(0); // remove the first part which is -- at the beginning
+        parts.pop(); // remove the last part which is the boundary with -- at the end
+
+        let mut title: &str = "";
+        let mut content: &str = "";
+        let mut image_name: String = String::new();
+        let mut image_data: Vec<u8> = Vec::new();
+
+        for part in parts {
+            let lines: std::str::Lines = part.lines();
+
+            let mut lines: Vec<&str> = lines.collect();
+            lines.pop();
+
+            let mut part_headers: Vec<(String, String)> = Vec::new();
+
+            for line in &mut lines {
+                let mut parts: Vec<&str> = line.split(": ").collect();
+                let key: String = parts.remove(0).to_string();
+                let value: String = parts.join(": ").to_string();
+                if key.is_empty() && value.is_empty() {
+                    continue;
+                } else if !key.is_empty() && value.is_empty() {
+                    break;
+                }
+                part_headers.push((key, value));
+            }
+
+            // the real image data is in complete_buffer, we need to find the start and end of the image data in the complete_buffer and extract it
+            // the image data is between the Content-Type header and the last boundary+--
+
+            let mut part_data: Vec<u8> = Vec::new();
+
+            // as soon as String::from_utf8_lossy return an ? character, we know that we are at the end of the headers (start of the image data)
+            // we need to find the end of the image data which is the last boundary+--
+            let mut end_of_image_data: usize = 0;
+            for i in 0..complete_buffer.len() {
+                if complete_buffer[i] == 45
+                    && complete_buffer[i + 1] == 45
+                    && complete_buffer[i + 2] == 13
+                    && complete_buffer[i + 3] == 10
+                {
+                    end_of_image_data = i - 1;
+                    break;
+                }
+            }
+
+            for i in 0..complete_buffer.len() {
+                if complete_buffer[i] == 13
+                    && complete_buffer[i + 1] == 10
+                    && complete_buffer[i + 2] == 13
+                    && complete_buffer[i + 3] == 10
+                {
+                    for j in i + 4..end_of_image_data {
+                        part_data.push(complete_buffer[j]);
+                    }
+                    break;
+                }
+            }
+
+            if part_data.len() > 500 {
+                println!("PART Data: {}", part_data.len());
+            } else {
+                println!("PART Data: {:?}", part_data);
+            }
+
+            println!("PART Headers: {:?}", part_headers);
+
+            let content_disposition: &str = part_headers
+                .iter()
+                .find(|header: &&(String, String)| header.0 == "Content-Disposition")
+                .unwrap()
+                .1
+                .as_str();
+
+            let mut name: String = content_disposition
+                .split(" name=")
+                .collect::<Vec<&str>>()
+                .last()
+                .unwrap()
+                .replace("\"", "");
+
+            name = name
+                .split(";")
+                .collect::<Vec<&str>>()
+                .first()
+                .unwrap()
+                .to_string();
+            let name: &str = name.as_str();
+
+            match name {
+                "title" => {
+                    title = lines.last().unwrap();
+                }
+                "content" => {
+                    content = lines.last().unwrap();
+                }
+                "image" => {
+                    image_name = content_disposition
+                        .split("filename=")
+                        .collect::<Vec<&str>>()
+                        .last()
+                        .unwrap()
+                        .replace("\"", "");
+                    // concat with random string to avoid overwriting
+                    image_name = format!(
+                        "{}-{}.{}",
+                        image_name
+                            .split('.')
+                            .collect::<Vec<&str>>()
+                            .first()
+                            .unwrap(),
+                        Uuid::new_v4(),
+                        image_name.split('.').collect::<Vec<&str>>().last().unwrap()
+                    );
+                    image_data = part_data;
+                }
+                _ => {}
+            }
+        }
+
+        let email: &str = decoded["email"].as_str().unwrap();
+        let response: String = upload(title, content, image_data, image_name, email).await;
+        println!("Response: {}", response.cyan());
+        socket.try_write(response.as_bytes()).unwrap();
+        return;
+    }
+
+    if path.contains("images") || path.contains("favicon.ico") {
+        let image: &str = path
+            .split('/')
+            .collect::<Vec<&str>>()
+            .last()
+            .unwrap()
+            .split('?')
+            .collect::<Vec<&str>>()
+            .first()
+            .unwrap();
+        let response: String = "HTTP/1.1 200 OK\r\nContent-Type: image/x-icon\r\n\r\n".to_string();
+        socket.write_all(response.as_bytes()).await.unwrap();
+        let favicon: Vec<u8> = fs::read(format!("images/{}", image)).await.unwrap();
+        socket.write_all(&favicon).await.unwrap();
+        return;
     }
 
     let response: String = match method.as_str() {
@@ -380,11 +588,28 @@ async fn main() {
 
     dbconn()
         .execute(
-            "CREATE TABLE IF NOT EXISTS messages (
-                    message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            "CREATE TABLE IF NOT EXISTS posts (
+                    posts_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     email TEXT NOT NULL,
-                    message TEXT,
+                    title TEXT NOT NULL,
+                    content TEXT,
+                    image VARCHAR(255),
                     datetime DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(email) REFERENCES users(email)
+                );",
+            [],
+        )
+        .unwrap();
+
+    dbconn()
+        .execute(
+            "CREATE TABLE IF NOT EXISTS comments (
+                    comment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    posts_id INTEGER NOT NULL,
+                    email TEXT NOT NULL,
+                    comment_message TEXT,
+                    datetime DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(posts_id) REFERENCES posts(posts_id),
                     FOREIGN KEY(email) REFERENCES users(email)
                 );",
             [],

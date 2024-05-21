@@ -1,97 +1,207 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RustHTTP - Index</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css"
-      rel="stylesheet"
-      type="text/css"
-    />
-    <script src="https://cdn.tailwindcss.com"></script>
-  </head>
-  <body class="h-screen">
-    <div
-      class="hero h-3/4"
-      style="
-        background-image: url(https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fhdqwalls.com%2Fwallpapers%2Ftrees-minimalism-4k.jpg&f=1&nofb=1&ipt=1c67fab7595d9ee2542fd5511f9cbb77bc33d0285317137ac49a39a359443fe2&ipo=images);
-      "
-    >
-      <div class="hero-overlay bg-opacity-80"></div>
-      <div class="hero-content text-center text-neutral-content">
-        <div class="max-w-md">
-          <h1 class="mb-5 text-5xl font-bold">Hello there, &{email}</h1>
-          <form action="/message" class="card-body" method="post">
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">Message</span>
-              </label>
-              <input
-                name="message"
-                type="text"
-                placeholder="message"
-                class="input input-bordered"
-                required
-              />
-            </div>
-            <div class="form-control mt-6">
-              <button class="btn btn-primary">Send</button>
-            </div>
-          </form>
-          <form action="/logout" method="post">
-            <button href="/logout" class="btn btn-error btn-outline">
-              Logout
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <div class="overflow-x-auto">
-      <table class="table">
-        <!-- head -->
-        <thead>
-          <tr>
-            <th class="w-fit">IMAGE</th>
-            <th class="w-fit">Email</th>
-            <th>Message</th>
-            <th class="w-fit">When</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </body>
-  <script>
-    fetch("/api/v1/messages", { credentials: "include" })
-      .then((res) => res.json())
-      .then((data) => {
-        const tbody = document.querySelector("tbody");
-        tbody.innerHTML = data
-          .map(
-            (product) => `
-          <tr>
-            <td class='w-fit'>
-                <div class="flex items-center gap-3">
-                  <div class="avatar placeholder">
-                    <div class="bg-neutral text-neutral-content rounded-full w-12">
-                      <span>${product.email.charAt(0).toUpperCase()}</span>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>RustHTTP - Index</title>
+        <link
+            href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css"
+            rel="stylesheet"
+            type="text/css"
+        />
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body>
+        <div
+            class="hero items-start"
+            style="background-image: url(../images/wp.png)"
+        >
+            <div class="hero-overlay bg-opacity-80"></div>
+            <div class="w-full p-4">
+                <div class="navbar bg-base-100 rounded-box p-4">
+                    <div class="navbar-start">
+                        <div class="btn btn-square avatar">
+                            <div class="w-12 rounded-btn">
+                                <img
+                                    src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.jpg"
+                                    alt="Avatar"
+                                />
+                            </div>
+                        </div>
                     </div>
-                  </div>
+                    <div class="navbar-center">
+                        <a class="btn btn-ghost text-xl">Rust Blog</a>
+                    </div>
+                    <div class="navbar-end gap-4">
+                        <button
+                            class="btn btn-primary"
+                            onclick="my_modal_3.showModal()"
+                        >
+                            New Post
+                        </button>
+                        <form action="/logout" method="post">
+                            <button
+                                href="/logout"
+                                class="btn btn-error btn-outline"
+                            >
+                                Logout
+                            </button>
+                        </form>
+                    </div>
                 </div>
-            </td>
-            <td><span class='font-bold'>${product.email}</span></td>
-            <td class='w-3/5'><span class='font-bold'>${
-              product.message
-            }</span></td>
-            <td><span class='badge badge-secondary badge-lg self-center'>${
-              product.datetime
-            }</span></td>
-          </tr>
-        `
-          )
-          .join("");
-      });
-  </script>
+
+                <div class="w-full mx-8 my-16">
+                    <h1 class="mb-5 text-6xl font-bold">
+                        Hello there, <span class="text-primary">&{email}</span>
+                    </h1>
+                    <h2 class="text-xl font-bold">
+                        Add a Post or comment down an existing one!
+                    </h2>
+                </div>
+            </div>
+        </div>
+
+        <div
+            class="w-full sm:columns-1 md:columns-2 xl:columns-2 xl:columns-3 bg-base-300 gap-4 p-4 border-t-8 border-primary"
+        >
+            <!-- Post Example -->
+            <div
+                class="card w-full bg-base-100 shadow-xl break-inside-avoid-column mb-4"
+            >
+                <figure class="px-10 pt-10">
+                    <img
+                        src="https://img.daisyui.com/images/stock/photo-1606107557195-0e29a4b5b4aa.jpg"
+                        alt="Shoes"
+                        class="rounded-xl"
+                    />
+                </figure>
+                <div class="card-body">
+                    <h2 class="card-title">Shoes!</h2>
+                    <p>
+                        Lorem ipsum dolor sit amet consectetur, adipisicing
+                        elit. Cupiditate, assumenda ipsam ex et voluptatum
+                        corrupti explicabo est modi tempore vero libero sed nam!
+                        Commodi, nam! Cumque beatae libero sequi omnis! Lorem
+                        ipsum dolor sit amet consectetur adipisicing elit. Dolor
+                        aperiam accusamus, aspernatur harum fugit id esse rem
+                        veniam unde? Corporis voluptatum, assumenda possimus
+                        totam aliquam sint et aliquid reiciendis minus! Lorem
+                        ipsum dolor sit amet consectetur adipisicing elit. Hic
+                        dolores similique, dolorem architecto dolorum in fugiat
+                        placeat ipsum ipsam officiis magni, ad nihil dignissimos
+                        rerum voluptates? Nobis veniam aspernatur omnis?
+                    </p>
+                    <div class="divider">Comments</div>
+                    <div class="w-full flex flex-col gap-4">
+                        <!-- Comment Example -->
+                        <div class="flex gap-4">
+                            <div class="avatar">
+                                <div class="w-12 rounded-btn">
+                                    <img
+                                        src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.jpg"
+                                        alt="Avatar"
+                                    />
+                                </div>
+                            </div>
+                            <div class="flex flex-col">
+                                <div class="font-bold">John Doe</div>
+                                <div>
+                                    Lorem ipsum dolor sit amet consectetur
+                                    adipisicing elit. Quisquam, voluptates.
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Comment Example -->
+                        <div class="flex gap-4">
+                            <div class="avatar">
+                                <div class="w-12 rounded-btn">
+                                    <img
+                                        src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.jpg"
+                                        alt="Avatar"
+                                    />
+                                </div>
+                            </div>
+                            <div class="flex flex-col">
+                                <div class="font-bold">John Doe</div>
+                                <div>
+                                    Lorem ipsum dolor sit amet consectetur
+                                    adipisicing elit. Quisquam, voluptates.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <form
+                        class="card-actions justify-end mt-6"
+                        action="/comment"
+                        method="post"
+                    >
+                        <input
+                            name="content"
+                            type="text"
+                            placeholder="Type here"
+                            class="input input-bordered w-full"
+                        />
+                        <button class="btn btn-outline w-full">Comment</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <dialog id="my_modal_3" class="modal">
+            <div class="modal-box">
+                <form method="dialog">
+                    <button
+                        class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                    >
+                        ✕
+                    </button>
+                </form>
+                <h3 class="font-bold text-xl text-center">Add a Post</h3>
+                <form
+                    class="card-body"
+                    action="/upload"
+                    method="post"
+                    enctype="multipart/form-data"
+                >
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Title</span>
+                        </label>
+                        <input
+                            name="title"
+                            type="text"
+                            placeholder="Title"
+                            class="input input-bordered"
+                            required
+                        />
+                    </div>
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Content</span>
+                        </label>
+                        <textarea
+                            name="content"
+                            class="textarea textarea-bordered min-h-64"
+                            placeholder="Content"
+                            required
+                        ></textarea>
+                    </div>
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Image</span>
+                        </label>
+                        <input
+                            name="image"
+                            type="file"
+                            class="file-input file-input-bordered w-full"
+                        />
+                    </div>
+                    <div class="form-control mt-6">
+                        <button class="btn btn-primary">Add</button>
+                    </div>
+                </form>
+            </div>
+        </dialog>
+    </body>
+    <script></script>
 </html>
