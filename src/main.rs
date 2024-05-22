@@ -124,15 +124,18 @@ async fn get(mut path: String, headers: Vec<(String, String)>) -> String {
         path = path.split("?").collect::<Vec<&str>>()[0].to_string();
     }
 
-    let sha256_token: &str = headers
+    let sha256_token: &str = match headers
         .iter()
         .find(|header: &&(String, String)| header.0 == "Cookie")
-        .unwrap()
-        .1
-        .split("token=")
-        .collect::<Vec<&str>>()
-        .last()
-        .unwrap();
+    {
+        Some(header) => header
+            .1
+            .split("token=")
+            .collect::<Vec<&str>>()
+            .last()
+            .unwrap(),
+        None => "",
+    };
     println!("Sha256 token: {}", sha256_token.cyan());
     let auth: bool = auth_token(&sha256_token).await;
 
@@ -286,15 +289,18 @@ async fn post(path: String, headers: Vec<(String, String)>, body: String) -> Str
         .split("&")
         .map(|param: &str| param.trim_end_matches('\0'))
         .collect();
-    let sha256_token: &str = headers
+    let sha256_token: &str = match headers
         .iter()
         .find(|header: &&(String, String)| header.0 == "Cookie")
-        .unwrap()
-        .1
-        .split("token=")
-        .collect::<Vec<&str>>()
-        .last()
-        .unwrap();
+    {
+        Some(header) => header
+            .1
+            .split("token=")
+            .collect::<Vec<&str>>()
+            .last()
+            .unwrap(),
+        None => "",
+    };
     println!("Sha256 token: {}", sha256_token.cyan());
 
     match path.as_str() {
@@ -346,6 +352,12 @@ fn parse_http_request(request: &str) -> (String, String, Vec<(String, String)>, 
     return (method, path, headers, body);
 }
 
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
 async fn handle_connection(mut socket: tokio::net::TcpStream) {
     let mut complete_buffer: Vec<u8> = Vec::new();
     println!(
@@ -364,7 +376,7 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
     let string_buffer: std::string::String = String::from_utf8_lossy(&complete_buffer).to_string();
 
     // dump the request to a file
-    let mut file = tokio::fs::File::create("request.txt").await.unwrap();
+    let mut file = tokio::fs::File::create("request.dump").await.unwrap();
     file.write_all(&string_buffer.as_bytes()).await.unwrap();
 
     let (method, path, headers, body) = parse_http_request(&string_buffer);
@@ -387,15 +399,18 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
         .to_string();
 
     if content_type.contains("multipart/form-data") && path == "/upload" && method == "POST" {
-        let sha256_token: &str = headers
+        let sha256_token: &str = match headers
             .iter()
             .find(|header: &&(String, String)| header.0 == "Cookie")
-            .unwrap()
-            .1
-            .split("token=")
-            .collect::<Vec<&str>>()
-            .last()
-            .unwrap();
+        {
+            Some(header) => header
+                .1
+                .split("token=")
+                .collect::<Vec<&str>>()
+                .last()
+                .unwrap(),
+            None => "",
+        };
         let decoded: JsonValue = get_userdata(sha256_token).await;
 
         if sha256_token.is_empty() {
@@ -451,32 +466,49 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
             // the real image data is in complete_buffer, we need to find the start and end of the image data in the complete_buffer and extract it
             // the image data is between the Content-Type header and the last boundary+--
 
-            let mut part_data: Vec<u8> = Vec::new();
-
             // as soon as String::from_utf8_lossy return an ? character, we know that we are at the end of the headers (start of the image data)
             // we need to find the end of the image data which is the last boundary+--
-            let mut end_of_image_data: usize = 0;
-            for i in 0..complete_buffer.len() {
-                if complete_buffer[i] == 45
-                    && complete_buffer[i + 1] == 45
-                    && complete_buffer[i + 2] == 13
-                    && complete_buffer[i + 3] == 10
-                {
-                    end_of_image_data = i - 1;
-                    break;
-                }
-            }
+            // Create markers for the start and end of the image data
+            let boundary_end = b"\r\n"; // standard CRLF following boundary
+            let double_crlf = b"\r\n\r\n"; // marks end of headers
 
-            for i in 0..complete_buffer.len() {
-                if complete_buffer[i] == 13
-                    && complete_buffer[i + 1] == 10
-                    && complete_buffer[i + 2] == 13
-                    && complete_buffer[i + 3] == 10
-                {
-                    for j in i + 4..end_of_image_data {
-                        part_data.push(complete_buffer[j]);
+            let mut part_data = Vec::new();
+
+            if let Some(mut start) = find_subslice(&complete_buffer, boundary.as_bytes()) {
+                start += boundary.len() + boundary_end.len(); // Skip boundary and CRLF
+
+                while let Some(end) = find_subslice(&complete_buffer[start..], boundary.as_bytes()) {
+                    let part_start = start;
+                    let part_end = start + end;
+
+                    // Extract headers
+                    if let Some(headers_end) =
+                        find_subslice(&complete_buffer[part_start..part_end], double_crlf)
+                    {
+                        let headers_end = part_start + headers_end + double_crlf.len();
+
+                        // Extract headers as string
+                        let headers = std::str::from_utf8(
+                            &complete_buffer[part_start..headers_end - double_crlf.len()],
+                        )
+                        .unwrap();
+
+                        // Check if this part is the image part by inspecting the headers
+                        if headers.contains("Content-Type: image/") {
+                            // Extract content
+                            let content_start = headers_end;
+                            let content_end = part_end - boundary_end.len();
+
+                            if content_start < content_end {
+                                part_data.extend_from_slice(
+                                    &complete_buffer[content_start..content_end],
+                                );
+                            }
+                        }
                     }
-                    break;
+
+                    // Move to the start of the next part
+                    start = part_end + boundary.len() + boundary_end.len();
                 }
             }
 

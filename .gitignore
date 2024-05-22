@@ -15,3 +15,6 @@ Cargo.lock
 
 # SQLite database file
 *.db
+
+# Custom Request DUMP
+*.dump
