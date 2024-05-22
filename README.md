@@ -219,11 +219,11 @@ Rights remain with the original authors of the code.
 
 ## Authors
 The original authors of the code are:
-- [x] zpx (the owner of the repository)
-- [x] redux for helping with the sql intelliphense
-- [x] fba06 for testing with WebKit Apple Products that are often a pain to work with
-- [x] midee for covering me during lessons so I could work on this >:D
-- [x] zpx's cat for testing the application
+- [x] [zpx](https://github.com/zzampax) (the owner of the repository)
+- [x] [redux](https://github.com/th3-riddler) for helping with the sql intelliphense
+- [x] [fba06](https://github.com/fba06) for testing with WebKit Apple Products that are often a pain to work with
+- [x] [midee](https://github.com/MiDeee) for covering me during lessons so I could work on this >:D
+- [x] ***zpx's cat*** for testing the application
 
 
 ![cat](cat.jpeg)
