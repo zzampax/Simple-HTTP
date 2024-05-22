@@ -1,11 +1,13 @@
-use rusqlite::Connection;
-use crate::db::dbconn;
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
-use sha256::digest;
 use colored::Colorize;
+use json::JsonValue;
+use rusqlite::Connection;
+use sha256::digest;
+
+use crate::db::dbconn;
+use crate::http::token;
 
 fn post_logout() -> String {
-    // delete cookie from browser
     return format!("HTTP/1.1 301 OK\r\nSet-Cookie: token=; Max-Age=0\r\nLocation: /\r\nContent-Length: 0\r\n\r\n");
 }
 
@@ -38,7 +40,6 @@ async fn post_login(dbconn: Connection, params: Vec<&str>) -> String {
         .as_bytes(),
     );
 
-    // check if user exists, if not, create user
     let user_exists: bool = dbconn
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM users WHERE email = ?1)",
@@ -66,7 +67,6 @@ async fn post_login(dbconn: Connection, params: Vec<&str>) -> String {
         }
     }
 
-    // create Token (insert it and return it)
     let token: String = dbconn
         .query_row(
             "SELECT token FROM tokens WHERE email = ?1 AND timestamp > datetime('now', '-1 day')",
@@ -91,8 +91,46 @@ async fn post_login(dbconn: Connection, params: Vec<&str>) -> String {
 }
 
 async fn post_comment(params: Vec<&str>, sha256_token: &str) -> String {
-    println!("Params: {:?} Token: {}", params, sha256_token);
-    return "HTTP/1.1 501 NOT IMPLEMENTED\r\n\r\n".to_string() + "501 Not Implemented";
+    let mut vec_params: Vec<(String, String)> = Vec::new();
+    for param in params {
+        let key_value: Vec<&str> = param.split('=').collect();
+        if key_value.len() == 2 {
+            let key: String = key_value[0].to_string();
+            let mut value: String = key_value[1].to_string();
+            value = value.replace("+", " ");
+            vec_params.push((key, value));
+        }
+    }
+    let decoded: JsonValue = token::get_userdata(sha256_token).await;
+    if decoded == JsonValue::Null {
+        return "HTTP/1.1 401 UNAUTHORIZED\r\n\r\n".to_string() + "401 Unauthorized";
+    }
+    let email: &str = decoded["email"].as_str().unwrap();
+
+    let content: &str = match vec_params.iter().find(|param| param.0 == "content") {
+        Some(param) => param.1.as_str(),
+        None => return "HTTP/1.1 400 BAD REQUEST\r\n\r\n".to_string() + "400 Bad Request",
+    };
+
+    let content: String = urlencoding::encode(content).to_string();
+    let post_id: i64 = match vec_params.iter().find(|param| param.0 == "post_id") {
+        Some(param) => param.1.parse::<i64>().unwrap(),
+        None => return "HTTP/1.1 400 BAD REQUEST\r\n\r\n".to_string() + "400 Bad Request",
+    };
+    let dbconn: Connection = dbconn();
+    dbconn
+        .execute(
+            "INSERT INTO comments (email, content, post_id) VALUES (?1, ?2, ?3)",
+            &[
+                &email as &dyn rusqlite::ToSql,
+                &content as &dyn rusqlite::ToSql,
+                &post_id as &dyn rusqlite::ToSql,
+            ],
+        )
+        .unwrap();
+
+    return "HTTP/1.1 301 Moved Permanently\r\nLocation: /\r\nContent-Length: 0\r\n\r\n"
+        .to_string();
 }
 
 pub async fn post(path: String, headers: Vec<(String, String)>, body: String) -> (String, Vec<u8>) {

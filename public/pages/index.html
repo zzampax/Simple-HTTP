@@ -17,7 +17,7 @@
             style="background-image: url(../images/wp.png)"
         >
             <div class="hero-overlay bg-opacity-80"></div>
-            <div class="w-full p-4">
+            <div class="w-full p-4 h-[50vh]">
                 <div class="navbar bg-base-100 rounded-box p-4">
                     <div class="navbar-start">
                         <div class="btn btn-square avatar">
@@ -40,9 +40,7 @@
                             New Post
                         </button>
                         <form action="/api/logout" method="post">
-                            <button
-                                class="btn btn-error btn-outline"
-                            >
+                            <button class="btn btn-error btn-outline">
                                 Logout
                             </button>
                         </form>
@@ -61,90 +59,9 @@
         </div>
 
         <div
-            class="w-full sm:columns-1 md:columns-2 xl:columns-2 xl:columns-3 bg-base-300 gap-4 p-4 border-t-8 border-primary"
-        >
-            <!-- Post Example -->
-            <div
-                class="card w-full bg-base-100 shadow-xl break-inside-avoid-column mb-4"
-            >
-                <figure class="px-10 pt-10">
-                    <img
-                        src="https://img.daisyui.com/images/stock/photo-1606107557195-0e29a4b5b4aa.jpg"
-                        alt="Shoes"
-                        class="rounded-xl"
-                    />
-                </figure>
-                <div class="card-body">
-                    <h2 class="card-title">Shoes!</h2>
-                    <p>
-                        Lorem ipsum dolor sit amet consectetur, adipisicing
-                        elit. Cupiditate, assumenda ipsam ex et voluptatum
-                        corrupti explicabo est modi tempore vero libero sed nam!
-                        Commodi, nam! Cumque beatae libero sequi omnis! Lorem
-                        ipsum dolor sit amet consectetur adipisicing elit. Dolor
-                        aperiam accusamus, aspernatur harum fugit id esse rem
-                        veniam unde? Corporis voluptatum, assumenda possimus
-                        totam aliquam sint et aliquid reiciendis minus! Lorem
-                        ipsum dolor sit amet consectetur adipisicing elit. Hic
-                        dolores similique, dolorem architecto dolorum in fugiat
-                        placeat ipsum ipsam officiis magni, ad nihil dignissimos
-                        rerum voluptates? Nobis veniam aspernatur omnis?
-                    </p>
-                    <div class="divider">Comments</div>
-                    <div class="w-full flex flex-col gap-4">
-                        <!-- Comment Example -->
-                        <div class="flex gap-4">
-                            <div class="avatar">
-                                <div class="w-12 rounded-btn">
-                                    <img
-                                        src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.jpg"
-                                        alt="Avatar"
-                                    />
-                                </div>
-                            </div>
-                            <div class="flex flex-col">
-                                <div class="font-bold">John Doe</div>
-                                <div>
-                                    Lorem ipsum dolor sit amet consectetur
-                                    adipisicing elit. Quisquam, voluptates.
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Comment Example -->
-                        <div class="flex gap-4">
-                            <div class="avatar">
-                                <div class="w-12 rounded-btn">
-                                    <img
-                                        src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.jpg"
-                                        alt="Avatar"
-                                    />
-                                </div>
-                            </div>
-                            <div class="flex flex-col">
-                                <div class="font-bold">John Doe</div>
-                                <div>
-                                    Lorem ipsum dolor sit amet consectetur
-                                    adipisicing elit. Quisquam, voluptates.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <form
-                        class="card-actions justify-end mt-6"
-                        action="/api/comment"
-                        method="post"
-                    >
-                        <input
-                            name="content"
-                            type="text"
-                            placeholder="Type here"
-                            class="input input-bordered w-full"
-                        />
-                        <button class="btn btn-outline w-full">Comment</button>
-                    </form>
-                </div>
-            </div>
-        </div>
+            id="posts"
+            class="w-full min-h-screen sm:columns-1 md:columns-2 xl:columns-2 xl:columns-3 bg-base-300 gap-4 p-4 border-t-8 border-primary"
+        ></div>
 
         <dialog id="my_modal_3" class="modal">
             <div class="modal-box">

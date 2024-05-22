@@ -1,10 +1,17 @@
-use uuid::Uuid;
-use json::JsonValue;
-use tokio;
 use crate::db::dbconn;
 use crate::http::token::get_userdata;
+use json::JsonValue;
+use tokio;
+use uuid::Uuid;
 
 pub mod binary;
+
+fn image_name_db(image_name: String) -> String {
+    if image_name.is_empty() {
+        return image_name;
+    }
+    return format!("/images/{}", image_name);
+}
 
 async fn save(
     title: &str,
@@ -18,24 +25,37 @@ async fn save(
         title, content, image_name, email
     );
 
-    let mut file = tokio::fs::File::create(format!("public/images/{}", image_name))
-        .await
-        .unwrap();
+    if !image_name.is_empty() {
+        let mut file = tokio::fs::File::create(format!("public/images/{}", image_name))
+            .await
+            .unwrap();
 
-    // write the image to the file
-    tokio::io::AsyncWriteExt::write_all(&mut file, &image_data).await.unwrap();
+        // write the image to the file
+        tokio::io::AsyncWriteExt::write_all(&mut file, &image_data)
+            .await
+            .unwrap();
+    }
 
     dbconn()
         .execute(
             "INSERT INTO posts (title, content, image, email) VALUES (?1, ?2, ?3, ?4)",
-            &[&title, &content, &image_name.as_str(), &email],
+            &[
+                &title,
+                &content,
+                &image_name_db(image_name).as_str(),
+                &email,
+            ],
         )
         .unwrap();
 
     return "HTTP/1.1 301 MOVED PERMANENTLY\r\nLocation: /\r\n\r\n".to_string();
 }
 
-pub async fn upload(headers: Vec<(String, String)>, body: &str, complete_buffer: Vec<u8>) -> String {
+pub async fn upload(
+    headers: Vec<(String, String)>,
+    body: &str,
+    complete_buffer: Vec<u8>,
+) -> String {
     let sha256_token: &str = match headers
         .iter()
         .find(|header: &&(String, String)| header.0 == "Cookie")
@@ -71,11 +91,11 @@ pub async fn upload(headers: Vec<(String, String)>, body: &str, complete_buffer:
         .last()
         .unwrap();
     let mut parts: Vec<&str> = body.split(boundary).collect();
-    parts.remove(0); // remove the first part which is -- at the beginning
-    parts.pop(); // remove the last part which is the boundary with -- at the end
+    parts.remove(0);
+    parts.pop();
 
-    let mut title: &str = "";
-    let mut content: &str = "";
+    let mut title: String = "".to_string();
+    let mut content: String = "".to_string();
     let mut image_name: String = String::new();
     let mut image_data: Vec<u8> = Vec::new();
 
@@ -83,6 +103,7 @@ pub async fn upload(headers: Vec<(String, String)>, body: &str, complete_buffer:
         let lines: std::str::Lines = part.lines();
 
         let mut lines: Vec<&str> = lines.collect();
+        lines.remove(0);
         lines.pop();
 
         let mut part_headers: Vec<(String, String)> = Vec::new();
@@ -98,13 +119,6 @@ pub async fn upload(headers: Vec<(String, String)>, body: &str, complete_buffer:
             }
             part_headers.push((key, value));
         }
-
-        // the real image data is in complete_buffer, we need to find the start and end of the image data in the complete_buffer and extract it
-        // the image data is between the Content-Type header and the last boundary+--
-
-        // as soon as String::from_utf8_lossy return an ? character, we know that we are at the end of the headers (start of the image data)
-        // we need to find the end of the image data which is the last boundary+--
-        // Create markers for the start and end of the image data
 
         println!("PART Headers: {:?}", part_headers);
 
@@ -130,12 +144,18 @@ pub async fn upload(headers: Vec<(String, String)>, body: &str, complete_buffer:
             .to_string();
         let name: &str = name.as_str();
 
+        let body_lines: Vec<&str> = lines
+            [lines.iter().position(|line| line.is_empty()).unwrap() + 1..]
+            .iter()
+            .map(|line| line.trim())
+            .collect();
+
         match name {
             "title" => {
-                title = lines.last().unwrap();
+                title = body_lines.join(" ");
             }
             "content" => {
-                content = lines.last().unwrap();
+                content = urlencoding::encode(body_lines.join("\n").as_str()).to_string();
             }
             "image" => {
                 image_name = content_disposition
@@ -144,14 +164,11 @@ pub async fn upload(headers: Vec<(String, String)>, body: &str, complete_buffer:
                     .last()
                     .unwrap()
                     .replace("\"", "");
-                // concat with random string to avoid overwriting
+                if image_name.is_empty() {
+                    continue;
+                }
                 image_name = format!(
-                    "{}-{}.{}",
-                    image_name
-                        .split('.')
-                        .collect::<Vec<&str>>()
-                        .first()
-                        .unwrap(),
+                    "asset-{}.{}",
                     Uuid::new_v4(),
                     image_name.split('.').collect::<Vec<&str>>().last().unwrap()
                 );
@@ -162,6 +179,13 @@ pub async fn upload(headers: Vec<(String, String)>, body: &str, complete_buffer:
     }
 
     let email: &str = decoded["email"].as_str().unwrap();
-    let response: String = save(title, content, image_data, image_name, email).await;
+    let response: String = save(
+        title.as_str(),
+        content.as_str(),
+        image_data,
+        image_name,
+        email,
+    )
+    .await;
     return response;
 }

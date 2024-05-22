@@ -18,7 +18,7 @@ pub fn init_db() {
     dbconn()
         .execute(
             "CREATE TABLE IF NOT EXISTS posts (
-                    posts_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    post_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     email TEXT NOT NULL,
                     title TEXT NOT NULL,
                     content TEXT,
@@ -34,11 +34,11 @@ pub fn init_db() {
         .execute(
             "CREATE TABLE IF NOT EXISTS comments (
                     comment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    posts_id INTEGER NOT NULL,
+                    post_id INTEGER NOT NULL,
                     email TEXT NOT NULL,
-                    comment_message TEXT,
+                    content TEXT,
                     datetime DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(posts_id) REFERENCES posts(posts_id),
+                    FOREIGN KEY(post_id) REFERENCES posts(post_id),
                     FOREIGN KEY(email) REFERENCES users(email)
                 );",
             [],

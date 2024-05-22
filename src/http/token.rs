@@ -1,9 +1,9 @@
-use rusqlite::Connection;
-use crate::db::dbconn;
 use json::JsonValue;
+use rusqlite::Connection;
+
+use crate::db::dbconn;
 
 pub async fn get_userdata(token: &str) -> JsonValue {
-    // Select user data from database using token, if token is invalid return empty JSON
     let dbconn: Connection = dbconn();
 
     let dbuser: String = match dbconn.query_row(
@@ -15,7 +15,6 @@ pub async fn get_userdata(token: &str) -> JsonValue {
         Err(_) => "".to_string(),
     };
 
-    // if user exists, return user data, else return empty JSON
     let user: JsonValue = if dbuser.is_empty() {
         json::parse("{}").unwrap()
     } else {

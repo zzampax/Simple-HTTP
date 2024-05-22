@@ -1,11 +1,11 @@
-mod multipart;
-mod http;
 mod db;
+mod http;
+mod multipart;
 
 use colored::Colorize;
+use http::{handle_get, handle_post};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use http::{handle_get, handle_post};
 
 fn parse_http_request(request: &str) -> (String, String, Vec<(String, String)>, String) {
     let mut lines = request.lines();
@@ -49,6 +49,10 @@ fn parse_http_request(request: &str) -> (String, String, Vec<(String, String)>, 
 }
 
 async fn handle_connection(mut socket: tokio::net::TcpStream) {
+    // BUFFERING
+    // put the whole request in a buffer (Vec<u8>)
+    // The buffer is filled with 16KB chunks until the whole request is read
+    // The buffer is then converted to a string and parsed
     let mut complete_buffer: Vec<u8> = Vec::new();
     println!(
         "\nNew connection from {}",
@@ -66,8 +70,8 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
     let string_buffer: std::string::String = String::from_utf8_lossy(&complete_buffer).to_string();
 
     // dump the request to a file
-    let mut file = tokio::fs::File::create("request.dump").await.unwrap();
-    file.write_all(&string_buffer.as_bytes()).await.unwrap();
+    //let mut file = tokio::fs::File::create("request.dump").await.unwrap();
+    //file.write_all(&string_buffer.as_bytes()).await.unwrap();
 
     let (method, path, headers, body) = parse_http_request(&string_buffer);
     if method == "ERROR" {
@@ -97,27 +101,13 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
         return;
     }
 
-    /*if path.contains("images") || path.contains("favicon.ico") {
-        let image: &str = path
-            .split('/')
-            .collect::<Vec<&str>>()
-            .last()
-            .unwrap()
-            .split('?')
-            .collect::<Vec<&str>>()
-            .first()
-            .unwrap();
-        let response: String = "HTTP/1.1 200 OK\r\nContent-Type: image/x-icon\r\n\r\n".to_string();
-        socket.write_all(response.as_bytes()).await.unwrap();
-        let favicon: Vec<u8> = fs::read(format!("public/images/{}", image)).await.unwrap();
-        socket.write_all(&favicon).await.unwrap();
-        return;
-    }*/
-
     let response: (String, Vec<u8>) = match method.as_str() {
         "GET" => handle_get::get(path, headers).await,
         "POST" => handle_post::post(path, headers, body).await,
-        _ => ("HTTP/1.1 405 METHOD NOT ALLOWED\r\n\r\n".to_string(), Vec::new()),
+        _ => (
+            "HTTP/1.1 405 METHOD NOT ALLOWED\r\n\r\n".to_string(),
+            Vec::new(),
+        ),
     };
 
     socket.write_all(response.0.as_bytes()).await.unwrap();
