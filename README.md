@@ -1,9 +1,11 @@
 # Simple RUST custom HTTP Blog Page
 <img src='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Frustacean.net%2Fmore-crabby-things%2Frustdocs.png&f=1&nofb=1&ipt=e2106bf2df223e5190325f534d2420ae79a4a430b67bdfda06918721d3786544&ipo=images' alt='Rust' width="300">
+
 ## Description
 
 This is a completly custom made HTTP server, it doesn't use any external library to handle the HTTP requests, it's all made from scratch.
 This is **not** a production ready server, it's just a simple project to learn how to handle HTTP requests in RUST.
+I am sure that my code can be substantially improved and refactored, this is my first real Rust project.
 
 ## Project Structure
 
