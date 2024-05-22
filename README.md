@@ -1,5 +1,5 @@
 # Simple RUST custom HTTP Blog Page
-![Rust](https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Frustacean.net%2Fmore-crabby-things%2Frustdocs.png&f=1&nofb=1&ipt=e2106bf2df223e5190325f534d2420ae79a4a430b67bdfda06918721d3786544&ipo=images)
+<img src='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Frustacean.net%2Fmore-crabby-things%2Frustdocs.png&f=1&nofb=1&ipt=e2106bf2df223e5190325f534d2420ae79a4a430b67bdfda06918721d3786544&ipo=images' alt='Rust' width="300">
 ## Description
 
 This is a completly custom made HTTP server, it doesn't use any external library to handle the HTTP requests, it's all made from scratch.
@@ -224,4 +224,6 @@ The original authors of the code are:
 - [x] fba06 for testing with WebKit Apple Products that are often a pain to work with
 - [x] midee for covering me during lessons so I could work on this >:D
 - [x] zpx's cat for testing the application
+
+
 ![cat](cat.jpeg)
