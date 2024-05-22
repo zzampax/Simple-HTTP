@@ -29,7 +29,6 @@ async fn get_plain_content(directory: &str, file: &str) -> String {
 }
 
 async fn get_bytes_content(directory: &str, file: &str) -> Vec<u8> {
-    println!("{}", format!("public/{}/{}", directory, file).red());
     let contents: Vec<u8> = fs::read(format!("public/{}/{}", directory, file)).await.unwrap();
     return contents;
 }
@@ -111,22 +110,25 @@ pub async fn get(mut path: String, headers: Vec<(String, String)>) -> (String, V
     println!("Sha256 token: {}", sha256_token.cyan());
 
     let mut requested_endpoint: (String, String) = match_type(&path);
-    println!("Requested endpoint: {:?}", requested_endpoint);
-    let mut contents: String = match_plain_content(requested_endpoint.clone(), sha256_token).await;
-
+    println!("Requested endpoint: {}", path.red());
+    
     // match extension of file
     let mut binary_content: Vec<u8> = Vec::new();
 
     let _temp: Vec<&str> = requested_endpoint.1.split(".").collect::<Vec<&str>>();
     let extension: &&str = _temp.last().unwrap();
 
+    let mut contents: String;
     if ["png", "jpg", "jpeg", "gif", "ico"].contains(&extension) {
         if &requested_endpoint.0 != "images" {
             requested_endpoint.0 = "images".to_string();
         }
         contents = format!("HTTP/1.1 200 OK\r\nContent-Type: image/{}\r\n\r\n", extension);
         binary_content = get_bytes_content(&requested_endpoint.0, &requested_endpoint.1).await;
-    }
+    } else {
+        contents = match_plain_content(requested_endpoint.clone(), sha256_token).await;
+    }    
+
     contents = check_template(&mut contents, get_userdata(sha256_token).await).await;
     
     return (contents, binary_content);
