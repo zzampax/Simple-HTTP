@@ -39,9 +39,8 @@
                         >
                             New Post
                         </button>
-                        <form action="/logout" method="post">
+                        <form action="/api/logout" method="post">
                             <button
-                                href="/logout"
                                 class="btn btn-error btn-outline"
                             >
                                 Logout
@@ -132,7 +131,7 @@
                     </div>
                     <form
                         class="card-actions justify-end mt-6"
-                        action="/comment"
+                        action="/api/comment"
                         method="post"
                     >
                         <input
@@ -159,7 +158,7 @@
                 <h3 class="font-bold text-xl text-center">Add a Post</h3>
                 <form
                     class="card-body"
-                    action="/upload"
+                    action="/api/upload"
                     method="post"
                     enctype="multipart/form-data"
                 >
@@ -203,5 +202,5 @@
             </div>
         </dialog>
     </body>
-    <script></script>
+    <script src="/javascripts/js.js"></script>
 </html>
