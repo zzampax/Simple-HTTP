@@ -121,7 +121,7 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
 async fn main() {
     db::init_db();
 
-    let mut port: i32 = 3000;
+    let mut port: i32 = 8080;
     loop {
         match TcpListener::bind(format!("0.0.0.0:{}", port)).await {
             Ok(listener) => {

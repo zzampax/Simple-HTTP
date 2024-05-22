@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 pub fn dbconn() -> Connection {
-    return Connection::open("users.db").unwrap();
+    return Connection::open("blog.db").unwrap();
 }
 
 pub fn init_db() {
