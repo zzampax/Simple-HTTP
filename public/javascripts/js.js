@@ -73,9 +73,10 @@ function createCard(content) {
     let commentDetails = document.createElement("div");
     commentDetails.classList.add(
       "flex",
-      "flex-row",
-      "justify-between",
-      "items-center",
+      "flex-col",
+      "lg:flex-row",
+      "lg:justify-between",
+      "lg:items-center",
       "w-ful",
     );
     let commentOwner = document.createElement("div");
@@ -116,7 +117,7 @@ function createCard(content) {
   input.setAttribute("name", "content");
   input.placeholder = "Add a comment";
   let button = document.createElement("button");
-  button.classList.add("btn", "btn-primary");
+  button.classList.add("btn", "btn-primary", "grow", "lg:grow-0");
   button.textContent = "Comment";
   form.appendChild(hiddenInput);
   form.appendChild(input);

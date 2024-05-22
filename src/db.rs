@@ -24,7 +24,7 @@ pub fn init_db() {
                     content TEXT,
                     image VARCHAR(255),
                     datetime DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(email) REFERENCES users(email)
+                    FOREIGN KEY(email) REFERENCES users(email) ON DELETE CASCADE
                 );",
             [],
         )
@@ -38,8 +38,8 @@ pub fn init_db() {
                     email TEXT NOT NULL,
                     content TEXT,
                     datetime DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(post_id) REFERENCES posts(post_id),
-                    FOREIGN KEY(email) REFERENCES users(email)
+                    FOREIGN KEY(post_id) REFERENCES posts(post_id) ON DELETE CASCADE,
+                    FOREIGN KEY(email) REFERENCES users(email) ON DELETE CASCADE
                 );",
             [],
         )
@@ -51,7 +51,7 @@ pub fn init_db() {
                     email TEXT PRIMARY KEY,
                     token TEXT NOT NULL,
                     timestamp DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(email) REFERENCES users(email)
+                    FOREIGN KEY(email) REFERENCES users(email) ON DELETE CASCADE
                 );",
             [],
         )

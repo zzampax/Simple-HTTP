@@ -16,8 +16,8 @@
             class="hero items-start"
             style="background-image: url(../images/wp.png)"
         >
-            <div class="hero-overlay bg-opacity-80"></div>
-            <div class="w-full p-4 h-[50vh]">
+            <div class="hero-overlay bg-opacity-90"></div>
+            <div class="w-full p-4 pb-[20vh]">
                 <div class="navbar bg-base-100 rounded-box p-4">
                     <div class="navbar-start">
                         <div class="btn btn-square avatar">
@@ -34,7 +34,7 @@
                     </div>
                     <div class="navbar-end gap-4">
                         <button
-                            class="btn btn-primary"
+                            class="hidden lg:block btn btn-primary"
                             onclick="my_modal_3.showModal()"
                         >
                             New Post
@@ -47,11 +47,11 @@
                     </div>
                 </div>
 
-                <div class="w-full mx-8 my-16">
-                    <h1 class="mb-5 text-6xl font-bold">
+                <div class="lg:mx-8 md:mx-8 sm:mx-4 my-16">
+                    <h1 class="mb-5 text-4xl md:text-5xl lg:text-8xl font-bold">
                         Hello there, <span class="text-primary">&{email}</span>
                     </h1>
-                    <h2 class="text-xl font-bold">
+                    <h2 class="text-lg lg:text-2xl font-bold">
                         Add a Post or comment down an existing one!
                     </h2>
                 </div>
@@ -60,7 +60,7 @@
 
         <div
             id="posts"
-            class="w-full min-h-screen sm:columns-1 md:columns-2 xl:columns-2 xl:columns-3 bg-base-300 gap-4 p-4 border-t-8 border-primary"
+            class="w-full min-h-screen sm:columns-1 md:columns-1 xl:columns-2 xl:columns-3 bg-base-300 gap-4 p-4 border-t-8 border-primary"
         ></div>
 
         <dialog id="my_modal_3" class="modal">
