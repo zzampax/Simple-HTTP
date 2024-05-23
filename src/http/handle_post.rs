@@ -8,7 +8,7 @@ use crate::db::dbconn;
 use crate::http::token;
 
 fn post_logout() -> String {
-    return format!("HTTP/1.1 301 OK\r\nSet-Cookie: token=; Max-Age=0\r\nLocation: /\r\nContent-Length: 0\r\n\r\n");
+    return format!("HTTP/1.1 301 OK\r\nSet-Cookie: token=; Max-Age=0; Path=/\r\nLocation: /\r\nContent-Length: 0\r\n\r\n");
 }
 
 async fn post_login(dbconn: Connection, params: Vec<&str>) -> String {
