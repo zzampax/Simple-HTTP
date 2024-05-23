@@ -4,8 +4,10 @@ mod multipart;
 
 use colored::Colorize;
 use http::{handle_get, handle_post};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::str;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use uuid::Uuid;
 
 fn parse_http_request(request: &str) -> (String, String, Vec<(String, String)>, String) {
     let mut lines = request.lines();
@@ -48,30 +50,64 @@ fn parse_http_request(request: &str) -> (String, String, Vec<(String, String)>, 
     return (method, path, headers, body);
 }
 
+async fn _dump_request(buffer: &Vec<u8>) {
+    let mut file = tokio::fs::File::create(format!("dumps/request-{}.dump", Uuid::new_v4()))
+        .await
+        .unwrap();
+    file.write_all(buffer).await.unwrap();
+}
+
+async fn handle_buffer_data(stream: &mut tokio::net::TcpStream) -> std::io::Result<Vec<u8>> {
+    let mut reader = tokio::io::BufReader::new(stream);
+    let mut request = Vec::new();
+    let mut headers = Vec::new();
+    let mut content_length = 0;
+
+    // Read the headers
+    loop {
+        let mut line = String::new();
+        reader.read_line(&mut line).await?;
+        if line == "\r\n" {
+            break;
+        }
+        if line.starts_with("Content-Length:") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(length_str) = parts.get(1) {
+                content_length = length_str.parse::<usize>().unwrap_or(0);
+            }
+        }
+        headers.push(line.clone());
+        request.extend_from_slice(line.as_bytes());
+    }
+
+    // Read the body if there's a Content-Length
+    if content_length > 0 {
+        let mut body: Vec<u8> = vec![0; content_length];
+        reader.read_exact(&mut body).await?;
+        request.extend_from_slice("\r\n".as_bytes());
+        request.extend_from_slice(&body);
+    }
+
+    Ok(request)
+}
+
 async fn handle_connection(mut socket: tokio::net::TcpStream) {
-    // BUFFERING
-    // put the whole request in a buffer (Vec<u8>)
-    // The buffer is filled with 16KB chunks until the whole request is read
-    // The buffer is then converted to a string and parsed
-    let mut complete_buffer: Vec<u8> = Vec::new();
     println!(
         "\nNew connection from {}",
         socket.peer_addr().unwrap().to_string().red()
     );
-    let mut buffer: [u8; 16384] = [0; 16384];
-    loop {
-        let bytes_read: usize = socket.read(&mut buffer).await.unwrap();
-        if bytes_read < 16384 {
-            complete_buffer.extend_from_slice(&buffer[..bytes_read]);
-            break;
+
+    // BUFFERING
+    let complete_buffer: Vec<u8> = match handle_buffer_data(&mut socket).await {
+        Ok(buffer) => buffer,
+        Err(_) => {
+            println!("Error reading from socket");
+            return;
         }
-        complete_buffer.extend_from_slice(&buffer);
-    }
+    };
     let string_buffer: std::string::String = String::from_utf8_lossy(&complete_buffer).to_string();
 
-    // dump the request to a file
-    //let mut file = tokio::fs::File::create("request.dump").await.unwrap();
-    //file.write_all(&string_buffer.as_bytes()).await.unwrap();
+    // _dump_request(&complete_buffer).await;
 
     let (method, path, headers, body) = parse_http_request(&string_buffer);
     if method == "ERROR" {
@@ -111,7 +147,7 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
     };
 
     socket.write_all(response.0.as_bytes()).await.unwrap();
-    // check if the response has Vec<u8> content
+
     if response.1.len() > 0 {
         socket.write_all(&response.1).await.unwrap();
     }
@@ -134,7 +170,7 @@ async fn main() {
             }
             Err(_) => {
                 println!("Port {} is in use, trying next port...", port);
-                if port == 3010 {
+                if port == port + 10 {
                     println!("All safe ports are in use, exiting...");
                     break;
                 }
