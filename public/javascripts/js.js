@@ -16,7 +16,7 @@ function createCard(content) {
   avatarImg.classList.add("w-12", "rounded-btn");
   let pfpOwner = document.createElement("img");
   pfpOwner.src =
-    "https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.jpg";
+    `https://api.dicebear.com/8.x/notionists-neutral/svg?seed=${content.email}`;
   pfpOwner.alt = "Avatar";
   avatarImg.appendChild(pfpOwner);
   avatar.appendChild(avatarImg);
@@ -64,7 +64,7 @@ function createCard(content) {
     avatarImg.classList.add("w-12", "rounded-btn");
     let pfp = document.createElement("img");
     pfp.src =
-      "https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.jpg";
+      `https://api.dicebear.com/8.x/notionists-neutral/svg?seed=${comment.email}`;
     pfp.alt = "Avatar";
     avatarImg.appendChild(pfp);
     avatar.appendChild(avatarImg);
