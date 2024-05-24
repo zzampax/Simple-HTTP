@@ -1,3 +1,15 @@
+function evalLinks(element) {
+  let links = element.textContent.match(/https?:\/\/[^\s]+/g);
+  if (links) {
+    links.forEach((link) => {
+      element.innerHTML = element.innerHTML.replace(
+        link,
+        `<a href="${link}" target="_blank" class="link text-primary">${link}</a>`,
+      );
+    });
+  }
+}
+
 function createCard(content) {
   let card = document.createElement("div");
   card.classList.add(
@@ -50,6 +62,7 @@ function createCard(content) {
   let p = document.createElement("p");
   p.classList.add("break-words", "whitespace-pre-line");
   p.textContent = decodeURIComponent(content.content);
+  evalLinks(p);
   let divider = document.createElement("div");
   divider.classList.add("divider");
   divider.textContent = "Comments";

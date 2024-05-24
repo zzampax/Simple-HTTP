@@ -44,7 +44,7 @@ async fn api_posts() -> String {
         let title: String = post.1;
         let content: String = post.2;
         let email: String = post.3;
-        let datetime: String = post.4;
+        let datetime: String = post.4 + " UTC";
         let image: String = post.5;
 
         let mut stmt = dbconn
@@ -63,7 +63,7 @@ async fn api_posts() -> String {
             let comment = comment.unwrap();
             let email: String = comment.0;
             let content: String = comment.1;
-            let datetime: String = comment.2;
+            let datetime: String = comment.2 + " UTC";
             comments.push_str(&format!(
                 r#"{{"email":"{}","content":"{}","datetime":"{}"}},"#,
                 email, content, datetime
@@ -109,7 +109,7 @@ async fn api_comments(post_id: i64) -> String {
         let comment = comment.unwrap();
         let email: String = comment.0;
         let content: String = comment.1;
-        let datetime: String = comment.2;
+        let datetime: String = comment.2 + " UTC";
         comments.push_str(&format!(
             r#"{{"email":"{}","content":"{}","datetime":"{}"}}"#,
             email, content, datetime
