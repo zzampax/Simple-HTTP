@@ -74,9 +74,30 @@ async fn api_posts() -> String {
         }
         comments.push_str("]");
 
+        let mut stmt = dbconn
+            .prepare(
+                "SELECT type, COUNT(type) AS count FROM reactions WHERE post_id = ? GROUP BY type",
+            )
+            .unwrap();
+        let reactions_iter = stmt.query_map([post_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        });
+
+        let mut reactions: String = "{".to_string();
+        for reaction in reactions_iter.unwrap() {
+            let reaction = reaction.unwrap();
+            let reaction_type: String = reaction.0;
+            let reaction_count: i64 = reaction.1;
+            reactions.push_str(&format!(r#""{}":{},"#, reaction_type, reaction_count));
+        }
+        if reactions.chars().last().unwrap() == ',' {
+            reactions.pop();
+        }
+        reactions.push_str("}");
+
         posts.push_str(&format!(
-            r#"{{"post_id":{},"title":"{}","content":"{}","email":"{}","datetime":"{}","image":"{}","comments":{}}},"#,
-            post_id, title, content, email, datetime, image, comments
+            r#"{{"post_id":{},"title":"{}","content":"{}","email":"{}","datetime":"{}","image":"{}","comments":{},"reactions":{}}},"#,
+            post_id, title, content, email, datetime, image, comments, reactions
         ));
     }
 
@@ -88,6 +109,30 @@ async fn api_posts() -> String {
     return format!(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{}",
         posts
+    );
+}
+
+async fn api_userreaction(post_id: i64, email: String) -> String {
+    let dbconn: Connection = dbconn();
+    let mut stmt = dbconn
+        .prepare("SELECT type FROM reactions WHERE post_id = ? AND email = ?")
+        .unwrap();
+    let reaction_iter = stmt.query_map(
+        [
+            &post_id as &dyn rusqlite::types::ToSql,
+            &email as &dyn rusqlite::types::ToSql,
+        ],
+        |row| Ok(row.get::<_, String>(0)?),
+    );
+
+    let mut reaction: String = "null".to_string();
+    for reaction_type in reaction_iter.unwrap() {
+        reaction = reaction_type.unwrap();
+    }
+
+    return format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{{\"type\":\"{}\"}}",
+        reaction
     );
 }
 
@@ -177,6 +222,9 @@ async fn match_plain_content(
     queries: Vec<(String, String)>,
 ) -> String {
     let auth: bool = auth_token(&sha256_token).await;
+    let decoded: JsonValue = get_userdata(&sha256_token).await;
+    let email: String = decoded["email"].to_string();
+
     if requested_endpoint.0 == "api" {
         let post_id = queries
             .iter()
@@ -188,6 +236,7 @@ async fn match_plain_content(
         match requested_endpoint.1.as_str() {
             "posts" => return api_posts().await,
             "comments" => return api_comments(post_id).await,
+            "userreaction" => return api_userreaction(post_id, email).await,
             _ => return "HTTP/1.1 404 NOT FOUND\r\nContent-Length: 0\r\n\r\n".to_string(),
         }
     }

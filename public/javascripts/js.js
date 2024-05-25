@@ -10,8 +10,41 @@ function evalLinks(element) {
   }
 }
 
-function createCard(content) {
+async function addReaction(reaction, id) {
+  let response = await fetch("/api/reaction", {
+    credentials: "same-origin",
+    method: "POST",
+    body: `reaction=${reaction}&post_id=${id}`,
+  });
+  let data = await response.json();
+  if (data.status === "ok") {
+    let reactions = document.getElementById(id).querySelector("#reactions");
+    reactions.childNodes.forEach((reaction) => {
+      if (reaction.classList.contains("btn-outline")) {
+        let reactionCount = reaction.querySelector(".badge");
+        reactionCount.textContent = parseInt(reactionCount.textContent) - 1;
+        reaction.classList.remove("btn-outline");
+      }
+    });
+    let reactionElement = reactions.querySelector(`.${reaction}`);
+    reactionElement.classList.add("btn-outline");
+    let reactionCount = reactionElement.querySelector(".badge");
+    reactionCount.textContent = parseInt(reactionCount.textContent) + 1;
+  }
+}
+
+async function getReaction(id) {
+  let response = await fetch(`/api/userreaction?post_id=${id}`, {
+    credentials: "same-origin",
+    method: "GET",
+  });
+  let data = await response.json();
+  return data.type;
+}
+
+async function createCard(content) {
   let card = document.createElement("div");
+  card.id = content.post_id;
   card.classList.add(
     "card",
     "w-full",
@@ -27,8 +60,7 @@ function createCard(content) {
   let avatarImg = document.createElement("div");
   avatarImg.classList.add("w-12", "rounded-btn");
   let pfpOwner = document.createElement("img");
-  pfpOwner.src =
-    `https://api.dicebear.com/8.x/notionists-neutral/svg?seed=${content.email}`;
+  pfpOwner.src = `https://api.dicebear.com/8.x/notionists-neutral/svg?seed=${content.email}`;
   pfpOwner.alt = "Avatar";
   avatarImg.appendChild(pfpOwner);
   avatar.appendChild(avatarImg);
@@ -63,6 +95,56 @@ function createCard(content) {
   p.classList.add("break-words", "whitespace-pre-line");
   p.textContent = decodeURIComponent(content.content);
   evalLinks(p);
+
+  let userReaction = await getReaction(content.post_id);
+
+  let reactions = document.createElement("div");
+  reactions.id = "reactions";
+  reactions.classList.add("flex", "gap-4", "justify-end", "mt-4");
+  let heart = document.createElement("div");
+  heart.classList.add("btn", "btn-sm", "heart");
+  if (userReaction === "heart") {
+    heart.classList.add("btn-outline");
+  }
+  heart.textContent = "\u2764";
+  let heartCount = document.createElement("div");
+  heartCount.textContent = content.reactions.heart || 0;
+  heartCount.classList.add("badge", "badge-secondary");
+  heart.appendChild(heartCount);
+  let thumbsUp = document.createElement("div");
+  thumbsUp.classList.add("btn", "btn-sm", "thumbsUp");
+  if (userReaction === "thumbsUp") {
+    thumbsUp.classList.add("btn-outline");
+  }
+  thumbsUp.textContent = "\u{1F44D}";
+  let thumbsUpCount = document.createElement("div");
+  thumbsUpCount.textContent = content.reactions.thumbsUp || 0;
+  thumbsUpCount.classList.add("badge", "badge-secondary");
+  thumbsUp.appendChild(thumbsUpCount);
+  let thumbsDown = document.createElement("div");
+  thumbsDown.classList.add("btn", "btn-sm", "thumbsDown");
+  if (userReaction === "thumbsDown") {
+    thumbsDown.classList.add("btn-outline");
+  }
+  thumbsDown.textContent = "\u{1F44E}";
+  let thumbsDownCount = document.createElement("div");
+  thumbsDownCount.textContent = content.reactions.thumbsDown || 0;
+  thumbsDownCount.classList.add("badge", "badge-secondary");
+  thumbsDown.appendChild(thumbsDownCount);
+  reactions.appendChild(heart);
+  reactions.appendChild(thumbsUp);
+  reactions.appendChild(thumbsDown);
+
+  heart.addEventListener("click", () => {
+    addReaction("heart", content.post_id);
+  });
+  thumbsUp.addEventListener("click", () => {
+    addReaction("thumbsUp", content.post_id);
+  });
+  thumbsDown.addEventListener("click", () => {
+    addReaction("thumbsDown", content.post_id);
+  });
+
   let divider = document.createElement("div");
   divider.classList.add("divider");
   divider.textContent = "Comments";
@@ -76,8 +158,7 @@ function createCard(content) {
     let avatarImg = document.createElement("div");
     avatarImg.classList.add("w-12", "rounded-btn");
     let pfp = document.createElement("img");
-    pfp.src =
-      `https://api.dicebear.com/8.x/notionists-neutral/svg?seed=${comment.email}`;
+    pfp.src = `https://api.dicebear.com/8.x/notionists-neutral/svg?seed=${comment.email}`;
     pfp.alt = "Avatar";
     avatarImg.appendChild(pfp);
     avatar.appendChild(avatarImg);
@@ -128,6 +209,7 @@ function createCard(content) {
   let input = document.createElement("input");
   input.classList.add("input", "input-bordered", "grow");
   input.setAttribute("name", "content");
+  input.setAttribute("required", "");
   input.placeholder = "Add a comment";
   let button = document.createElement("button");
   button.classList.add("btn", "btn-primary", "grow", "lg:grow-0");
@@ -142,6 +224,7 @@ function createCard(content) {
   }
   cardBody.appendChild(h2);
   cardBody.appendChild(p);
+  cardBody.appendChild(reactions);
   cardBody.appendChild(divider);
   cardBody.appendChild(comments);
   cardBody.appendChild(form);
@@ -154,8 +237,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   let response = await fetch("/api/posts");
   let posts = await response.json();
   let container = document.getElementById("posts");
-  posts.forEach((post) => {
-    let card = createCard(post);
+  posts.forEach(async (post) => {
+    let card = await createCard(post);
     container.appendChild(card);
   });
 });

@@ -47,6 +47,21 @@ pub fn init_db() {
 
     dbconn()
         .execute(
+            "CREATE TABLE IF NOT EXISTS reactions (
+                reaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                email TEXT NOT NULL,
+                type VARCHAR(255) NOT NULL,
+                datetime DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(post_id) REFERENCES posts(post_id) ON DELETE CASCADE,
+                FOREIGN KEY(email) REFERENCES users(email) ON DELETE CASCADE
+            )",
+            [],
+        )
+        .unwrap();
+
+    dbconn()
+        .execute(
             "CREATE TABLE IF NOT EXISTS tokens (
                     email TEXT PRIMARY KEY,
                     token TEXT NOT NULL,

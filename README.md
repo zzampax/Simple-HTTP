@@ -83,7 +83,15 @@ The database has the following tables:
   - Primary key: **_comment_id_**
   - Foreign key: **_post_id_** references **_posts(post_id)_** on delete cascade
   - Foreign key: **_email_** references **_users(email)_** on delete cascade
-    ![Database Structure](dbstructure.png)
+- **reactions**: Contains the reactions' data (heart, like, dislike)
+  - **reaction_id**: The UUID of the reaction
+  - **post_id**: The UUID of the post
+  - **email**: The email of the user that created the reaction
+  - **type**: The reaction of the user
+  - Primary key: **_reaction_id_**
+  - Foreign key: **_post_id_** references **_posts(post_id)_** on delete cascade
+  - Foreign key: **_email_** references **_users(email)_** on delete cascade
+![Database Structure](dbstructure.png)
 
 ## How to run
 
