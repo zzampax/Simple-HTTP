@@ -1,6 +1,6 @@
 # Simple RUST custom HTTP Blog Page
 
-<img src='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Frustacean.net%2Fmore-crabby-things%2Frustdocs.png&f=1&nofb=1&ipt=e2106bf2df223e5190325f534d2420ae79a4a430b67bdfda06918721d3786544&ipo=images' alt='Rust' width="300">
+<div style="display:flex;justify-content:center;"><img src='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Frustacean.net%2Fmore-crabby-things%2Frustdocs.png&f=1&nofb=1&ipt=e2106bf2df223e5190325f534d2420ae79a4a430b67bdfda06918721d3786544&ipo=images' alt='Rust' width="400"></div>
 
 ## Description
 
@@ -91,6 +91,8 @@ The database has the following tables:
   - Primary key: **_reaction_id_**
   - Foreign key: **_post_id_** references **_posts(post_id)_** on delete cascade
   - Foreign key: **_email_** references **_users(email)_** on delete cascade
+
+
 ![Database Structure](dbstructure.png)
 
 ## How to run
@@ -231,7 +233,7 @@ https://api.dicebear.com/8.x/notionists-neutral/svg?seed=rust.blog@zpx.it
 Result:
 
 
-<img src='https://api.dicebear.com/8.x/notionists-neutral/svg?seed=rust.blog@zpx.it' alt='Profile Picture' width="300">
+<div style="display:flex;justify-content:center;"><img src='https://api.dicebear.com/8.x/notionists-neutral/svg?seed=rust.blog@zpx.it' alt='Profile Picture' width="300"></div>
 
 ## License
 
