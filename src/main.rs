@@ -157,11 +157,12 @@ async fn handle_connection(mut socket: tokio::net::TcpStream) {
 async fn main() {
     db::init_db();
 
-    let mut port: i32 = 8080;
+    let ports: Vec<u16> = vec![80, 8000, 8080, 8888];
+    let mut port_index: usize = 0;
     loop {
-        match TcpListener::bind(format!("0.0.0.0:{}", port)).await {
+        match TcpListener::bind(format!("0.0.0.0:{}", ports[port_index])).await {
             Ok(listener) => {
-                println!("\n --> Server running on port {}! <--", port);
+                println!("\n --> Server running on port {}! <--", ports[port_index]);
 
                 loop {
                     let (socket, _) = listener.accept().await.unwrap();
@@ -169,12 +170,12 @@ async fn main() {
                 }
             }
             Err(_) => {
-                println!("Port {} is in use, trying next port...", port);
-                if port == port + 10 {
+                println!("Port {} is in use, trying next port...", ports[port_index]);
+                if ports[port_index] == *ports.last().unwrap(){
                     println!("All safe ports are in use, exiting...");
                     break;
                 }
-                port += 1;
+                port_index += 1;
             }
         }
     }
