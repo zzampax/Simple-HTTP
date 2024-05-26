@@ -126,6 +126,7 @@ Every API is in the route `/api`, the methods implemented are simply `GET` and `
 | --- | --- |
 | **/api/posts** | Returns all the posts in the database |
 | **/api/comments?post_id=<post_id>** | Returns all the comments of the post with the UUID `<uuid>` |
+| **/api/userreaction?post_id=<post_id>** | Returns the type of reaction the user has set for a post (heart, thumbsUp, ...) |
 ### POST
 | Route | Description |
 | --- | --- |
@@ -242,7 +243,7 @@ The original authors of the code are:
 - [x] [zpx](https://github.com/zzampax) (the owner of the repository)
 - [x] [redux](https://github.com/th3-riddler) for helping with the sql intelliphense
 - [x] [fba06](https://github.com/fba06) for testing with WebKit Apple Products that are often a pain to work with
-- [x] [midee](https://github.com/MiDeee) for covering me during lessons so I could work on this >:D
+- [x] [midee](https://github.com/MiDeee) for dumping multiple Gigabytes of Images as Test both for the application and my poor ThinkPad X270
 - [x] **_zpx's cat_** for testing the application
 
 ![cat](cat.jpeg)
